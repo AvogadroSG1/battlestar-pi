@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "battlestar_pi",
+  "project_id": "79c9ce5c-e801-44a4-b274-7c10412c6c30"
+}

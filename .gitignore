@@ -46,3 +46,14 @@ plans/
 .pi/settings.json
 collect.sh
 packages/agent/docs/extensions/pi-server-artifact/index.md
+
+
+# APM dependencies
+apm_modules/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*
