@@ -8,13 +8,13 @@ This handoff breaks down the MVP recorded in [ADR 0001](./adr/0001-exploration-u
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** implemented in `feat(coding-agent): add read-only Explore overview`
 
-- [ ] `/explore` starts collecting repository context immediately; without an argument it starts at the repository root, and with a path it starts at that path.
-- [ ] The investigation runs through Pi's regular agent loop, so its prompt, tool calls, and responses remain visible in the session transcript.
-- [ ] Only built-in read and search tools are available during the exploration; shell, write, edit, and custom tools are unavailable.
-- [ ] The previous active tool set is restored when the user exits or cancels exploration.
-- [ ] The overview is an ASCII architecture sketch with a short list of Flow candidates. Source citations are optional and do not block display.
+- [x] `/explore` starts collecting repository context immediately; without an argument it starts at the repository root, and with a path it starts at that path.
+- [x] The investigation runs through Pi's regular agent loop, so its prompt, tool calls, and responses remain visible in the session transcript.
+- [x] Only built-in read and search tools are available during the exploration; shell, write, edit, and custom tools are unavailable.
+- [x] The previous active tool set is restored when the user exits or cancels exploration.
+- [x] The overview is an ASCII architecture sketch with a short list of Flow candidates. Source citations are optional and do not block display.
 
 ## 02: Choose a flow and generate its sequence diagram
 
