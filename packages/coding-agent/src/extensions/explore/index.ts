@@ -3,6 +3,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
+import { getExploreArchitectureDiscoverySkillDir } from "../../config.ts";
 
 const READ_ONLY_TOOLS = ["read", "grep", "find", "ls"];
 const EXPLORE_CONTEXT_TYPE = "explore-mode-context";
@@ -16,7 +17,7 @@ interface DiagramAnnotation {
 }
 
 function parseDiagram(text: string): DiagramAnnotation[] {
-	const annotationSection = text.match(/(?:^|\n)Diagram annotations:\s*\n([\s\S]*)$/i)?.[1] ?? "";
+	const annotationSection = text.match(/(?:^|\n)(?:Node|Diagram) annotations:\s*\n([\s\S]*)$/i)?.[1] ?? "";
 	return annotationSection
 		.split("\n")
 		.map((line) => {
@@ -71,6 +72,8 @@ export default function exploreExtension(pi: ExtensionAPI): void {
 	let exitWhenSettled = false;
 	let latestAssistantText = "";
 
+	pi.on("resources_discover", () => ({ skillPaths: [getExploreArchitectureDiscoverySkillDir()] }));
+
 	function leaveExplore(ctx: ExtensionContext, abort: boolean): void {
 		if (abort) ctx.abort();
 		stage = undefined;
@@ -109,7 +112,7 @@ export default function exploreExtension(pi: ExtensionAPI): void {
 			ctx.ui.notify("Wait for the current Explore step to finish before navigating annotations.", "warning");
 			return;
 		}
-		if (stage !== "diagram" || annotations.length === 0) {
+		if ((stage !== "overview" && stage !== "diagram") || annotations.length === 0) {
 			ctx.ui.notify("No diagram annotations are available to navigate.", "info");
 			return;
 		}
@@ -178,7 +181,12 @@ export default function exploreExtension(pi: ExtensionAPI): void {
 			toolsBeforeExplore = pi.getActiveTools();
 			pi.setActiveTools(READ_ONLY_TOOLS);
 			ctx.ui.setStatus("explore-mode", ctx.ui.theme.fg("warning", "explore · read-only"));
-			pi.sendUserMessage(`Explore the local codebase rooted at ${JSON.stringify(target)}.`);
+			pi.sendUserMessage(
+				`/skill:architecture-discovery Explore the local codebase rooted at ${JSON.stringify(target)}.`,
+				{
+					expandPromptTemplates: true,
+				},
+			);
 		},
 	});
 
@@ -216,7 +224,7 @@ export default function exploreExtension(pi: ExtensionAPI): void {
 
 		const instructions =
 			stage === "overview"
-				? `Create a concise ASCII architecture overview for the requested local codebase area. Follow it with a section titled exactly "Flow candidates:" containing three to five lines formatted exactly "- [Flow] Short name — brief description". Mark architecture diagram notes with numbered annotations and describe them below the diagram. Use only the active read-only tools. Base claims on source you inspected, keep the survey cursory, and provide best-effort local path:line references where useful. Do not use Mermaid.`
+				? `Follow the architecture-discovery skill loaded for this Explore step. Keep this investigation cursory and read-only. Build an ASCII node map with numbered annotations and list selectable Flow candidates. Do not write files. Use only the active read-only tools.`
 				: `Investigate the Flow candidate requested by the user. Trace its participants and ordered interactions through the source. Return one static ASCII sequence diagram inside a single fenced code block. Keep every diagram line under 80 characters by using short participant labels and concise messages. Follow it with a section titled exactly "Diagram annotations:" containing lines formatted exactly "- [1] Short title — explanation; source: path:line". Number annotations in diagram order. Draw branches that change the outcome and summarize smaller alternatives in annotations. Use only the active read-only tools and provide best-effort local path:line references where useful. Do not use Mermaid.`;
 
 		return {
@@ -257,8 +265,14 @@ export default function exploreExtension(pi: ExtensionAPI): void {
 		}
 		if (stage === "overview") {
 			flowCandidates = getFlowCandidates(latestAssistantText);
+			annotations = parseDiagram(latestAssistantText);
+			selectedAnnotation = 0;
 			stage = "diagram";
-			ctx.ui.notify("Overview ready. Choose a Flow with /explore, or run /explore exit to leave.", "info");
+			showSelectedAnnotation(ctx);
+			ctx.ui.notify(
+				"Architecture overview ready. Choose a Flow with /explore, or run /explore exit to leave.",
+				"info",
+			);
 			return;
 		}
 		if (stage !== "diagram" || flowCandidates.length === 0) return;

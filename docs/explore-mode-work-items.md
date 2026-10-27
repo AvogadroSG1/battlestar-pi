@@ -4,7 +4,7 @@ This handoff breaks down the MVP recorded in [ADR 0001](./adr/0001-exploration-u
 
 ## 01: Start read-only repository exploration
 
-**What to build:** Running `/explore` starts a read-only investigation of the repository root. An optional path narrows the starting scope. The user sees an ASCII architecture overview and flow candidates in the normal Pi session.
+**What to build:** Running `/explore` starts a read-only, cursory architecture discovery of the repository root. An optional path narrows the starting scope. Adapt the FINOS architecture-discovery rubric to identify runtime nodes and evidence-backed relationships, then show a numbered ASCII map, navigable node annotations, key observations, and flow candidates in the normal Pi session. Do not create CALM files or claim deterministic inventory.
 
 **Blocked by:** None (can start immediately).
 
@@ -14,11 +14,13 @@ This handoff breaks down the MVP recorded in [ADR 0001](./adr/0001-exploration-u
 - [x] The investigation runs through Pi's regular agent loop, so its prompt, tool calls, and responses remain visible in the session transcript.
 - [x] Only built-in read and search tools are available during the exploration; shell, write, edit, and custom tools are unavailable.
 - [x] The previous active tool set is restored when the user exits or cancels exploration.
-- [x] The overview is an ASCII architecture sketch with a short list of Flow candidates. Source citations are optional and do not block display.
+- [x] The overview is a node-and-relationship ASCII map with numbered node annotations, brief architecture observations, and a short list of Flow candidates. Source citations are best effort and do not block display.
+- [x] Node discovery favors active source and configuration evidence, distinguishes runtime components from classes, and does not write files.
+- [x] The extension provides and explicitly invokes its architecture-discovery skill for the first step, independent of target-repository trust.
 
 ## 02: Choose a flow and generate its sequence diagram
 
-**What to build:** Selecting a Flow candidate starts a focused read-only investigation and displays its sequence diagram. The user can return to the overview and choose another flow.
+**What to build:** Selecting a Flow candidate starts a focused read-only investigation and displays its ASCII sequence diagram. This follow-up business-diagram phase is separate from architecture-node discovery and is a candidate for a future invocable skill. The user can return to the overview and choose another flow.
 
 **Blocked by:** 01: Start read-only repository exploration.
 

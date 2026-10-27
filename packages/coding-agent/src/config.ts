@@ -455,6 +455,16 @@ export function getExamplesPath(): string {
 	return resolve(join(getPackageDir(), "examples"));
 }
 
+/** Get the bundled architecture-discovery skill directory for the Explore extension. */
+export function getExploreArchitectureDiscoverySkillDir(): string {
+	if (isBunBinary) {
+		return join(getPackageDir(), "extensions", "explore", "architecture-discovery");
+	}
+	const packageDir = getPackageDir();
+	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
+	return join(packageDir, srcOrDist, "extensions", "explore", "architecture-discovery");
+}
+
 /** Get path to CHANGELOG.md */
 export function getChangelogPath(): string {
 	return resolve(join(getPackageDir(), "CHANGELOG.md"));
