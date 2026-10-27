@@ -1,9 +1,8 @@
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import type { Component, TUI } from "@earendil-works/pi-tui";
-import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Key } from "@earendil-works/pi-tui";
 
 const READ_ONLY_TOOLS = ["read", "grep", "find", "ls"];
 const EXPLORE_CONTEXT_TYPE = "explore-mode-context";
@@ -16,66 +15,9 @@ interface DiagramAnnotation {
 	description: string;
 }
 
-class DiagramViewer implements Component {
-	private selectedIndex = 0;
-	private tui: TUI;
-	private theme: Theme;
-	private diagram: string[];
-	private annotations: DiagramAnnotation[];
-	private done: (result: "flows" | "exit") => void;
-
-	constructor(
-		tui: TUI,
-		theme: Theme,
-		diagram: string[],
-		annotations: DiagramAnnotation[],
-		done: (result: "flows" | "exit") => void,
-	) {
-		this.tui = tui;
-		this.theme = theme;
-		this.diagram = diagram;
-		this.annotations = annotations;
-		this.done = done;
-	}
-
-	handleInput(data: string): void {
-		if (matchesKey(data, "escape")) {
-			this.done("flows");
-		} else if (matchesKey(data, "ctrl+c") || matchesKey(data, "q")) {
-			this.done("exit");
-		} else if (this.annotations.length === 0) {
-			return;
-		} else if (matchesKey(data, "up")) {
-			this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-			this.tui.requestRender();
-		} else if (matchesKey(data, "down")) {
-			this.selectedIndex = Math.min(this.annotations.length - 1, this.selectedIndex + 1);
-			this.tui.requestRender();
-		}
-	}
-
-	invalidate(): void {}
-
-	render(width: number): string[] {
-		const annotation = this.annotations[this.selectedIndex];
-		const lines = [
-			this.theme.fg("accent", "Sequence diagram"),
-			...this.diagram,
-			"",
-			this.theme.fg("muted", "Diagram annotation · ↑/↓ select · Esc flows · q exit"),
-			annotation
-				? this.theme.fg("accent", `[${annotation.number}] ${annotation.title}`)
-				: this.theme.fg("muted", "No annotations were recognized."),
-			...(annotation ? [annotation.description] : []),
-		];
-		return lines.map((line) => truncateToWidth(line, width));
-	}
-}
-
-function parseDiagram(text: string): { diagram: string[]; annotations: DiagramAnnotation[] } {
-	const diagramText = text.match(/```[^\n]*\n([\s\S]*?)```/)?.[1];
+function parseDiagram(text: string): DiagramAnnotation[] {
 	const annotationSection = text.match(/(?:^|\n)Diagram annotations:\s*\n([\s\S]*)$/i)?.[1] ?? "";
-	const annotations = annotationSection
+	return annotationSection
 		.split("\n")
 		.map((line) => {
 			const match = line.match(/^\s*[-*]\s+\[(\d+)\]\s+(.+?)\s*$/);
@@ -84,7 +26,6 @@ function parseDiagram(text: string): { diagram: string[]; annotations: DiagramAn
 			return { number: Number(match[1]), title: title!, description };
 		})
 		.filter((annotation): annotation is DiagramAnnotation => annotation !== undefined);
-	return { diagram: (diagramText ?? "Diagram unavailable.").split("\n"), annotations };
 }
 
 function isInsideRoot(root: string, target: string): boolean {
@@ -124,6 +65,8 @@ export default function exploreExtension(pi: ExtensionAPI): void {
 	let stage: ExploreStage | undefined;
 	let scope: string | undefined;
 	let flowCandidates: string[] = [];
+	let annotations: DiagramAnnotation[] = [];
+	let selectedAnnotation = 0;
 	let toolsBeforeExplore: string[] | undefined;
 	let exitWhenSettled = false;
 	let latestAssistantText = "";
@@ -133,6 +76,8 @@ export default function exploreExtension(pi: ExtensionAPI): void {
 		stage = undefined;
 		scope = undefined;
 		flowCandidates = [];
+		annotations = [];
+		selectedAnnotation = 0;
 		latestAssistantText = "";
 		exitWhenSettled = false;
 		if (toolsBeforeExplore !== undefined) {
@@ -140,6 +85,36 @@ export default function exploreExtension(pi: ExtensionAPI): void {
 			toolsBeforeExplore = undefined;
 		}
 		ctx.ui.setStatus("explore-mode", undefined);
+		ctx.ui.setWidget("explore-annotation", undefined);
+	}
+
+	function showSelectedAnnotation(ctx: ExtensionContext): void {
+		const annotation = annotations[selectedAnnotation];
+		if (!annotation) {
+			ctx.ui.setWidget("explore-annotation", [
+				"Explore · no diagram annotations were recognized.",
+				"Use /explore to choose another Flow or /explore exit to leave.",
+			]);
+			return;
+		}
+		ctx.ui.setWidget("explore-annotation", [
+			`Explore annotation ${selectedAnnotation + 1}/${annotations.length} · /explore next | previous`,
+			`[${annotation.number}] ${annotation.title}`,
+			annotation.description,
+		]);
+	}
+
+	function navigateAnnotation(ctx: ExtensionContext, direction: -1 | 1): void {
+		if (!ctx.isIdle()) {
+			ctx.ui.notify("Wait for the current Explore step to finish before navigating annotations.", "warning");
+			return;
+		}
+		if (stage !== "diagram" || annotations.length === 0) {
+			ctx.ui.notify("No diagram annotations are available to navigate.", "info");
+			return;
+		}
+		selectedAnnotation = Math.max(0, Math.min(annotations.length - 1, selectedAnnotation + direction));
+		showSelectedAnnotation(ctx);
 	}
 
 	pi.registerCommand("explore", {
@@ -152,14 +127,32 @@ export default function exploreExtension(pi: ExtensionAPI): void {
 
 			if (stage !== undefined) {
 				if (!ctx.isIdle()) {
+					if (args.trim().toLowerCase() !== "exit") {
+						ctx.ui.notify("Wait for the current Explore step to finish.", "warning");
+						return;
+					}
 					exitWhenSettled = true;
 					ctx.abort();
-					ctx.ui.notify("Stopping the exploration before restoring your previous tools.", "info");
+					ctx.ui.notify("Stopping Explore and restoring your previous tools.", "info");
 					return;
 				}
-				if (args.trim().toLowerCase() === "exit") {
+				const action = args.trim().toLowerCase();
+				if (action === "exit") {
 					leaveExplore(ctx, false);
 					ctx.ui.notify("Explore mode stopped. Previous tools restored.", "info");
+					return;
+				}
+				if (action === "next") {
+					navigateAnnotation(ctx, 1);
+					return;
+				}
+				if (action === "previous" || action === "prev") {
+					navigateAnnotation(ctx, -1);
+					return;
+				}
+				if (action !== "" && action !== "flow") {
+					stage = "diagram";
+					pi.sendUserMessage(`Inspect this Flow candidate: ${args.trim()}`);
 					return;
 				}
 				await chooseFlow(ctx);
@@ -181,11 +174,21 @@ export default function exploreExtension(pi: ExtensionAPI): void {
 			scope = target;
 			stage = "overview";
 			flowCandidates = [];
+			annotations = [];
 			toolsBeforeExplore = pi.getActiveTools();
 			pi.setActiveTools(READ_ONLY_TOOLS);
 			ctx.ui.setStatus("explore-mode", ctx.ui.theme.fg("warning", "explore · read-only"));
 			pi.sendUserMessage(`Explore the local codebase rooted at ${JSON.stringify(target)}.`);
 		},
+	});
+
+	pi.registerShortcut(Key.ctrlAlt("up"), {
+		description: "Previous Explore diagram annotation",
+		handler: (ctx) => navigateAnnotation(ctx, -1),
+	});
+	pi.registerShortcut(Key.ctrlAlt("down"), {
+		description: "Next Explore diagram annotation",
+		handler: (ctx) => navigateAnnotation(ctx, 1),
 	});
 
 	async function chooseFlow(ctx: ExtensionContext): Promise<void> {
@@ -214,7 +217,7 @@ export default function exploreExtension(pi: ExtensionAPI): void {
 		const instructions =
 			stage === "overview"
 				? `Create a concise ASCII architecture overview for the requested local codebase area. Follow it with a section titled exactly "Flow candidates:" containing three to five lines formatted exactly "- [Flow] Short name — brief description". Mark architecture diagram notes with numbered annotations and describe them below the diagram. Use only the active read-only tools. Base claims on source you inspected, keep the survey cursory, and provide best-effort local path:line references where useful. Do not use Mermaid.`
-				: `Investigate the Flow candidate requested by the user. Trace its participants and ordered interactions through the source. Return one static ASCII sequence diagram inside a single fenced code block. Follow it with a section titled exactly "Diagram annotations:" containing lines formatted exactly "- [1] Short title — explanation; source: path:line". Number annotations in diagram order. Draw branches that change the outcome and summarize smaller alternatives in annotations. Use only the active read-only tools and provide best-effort local path:line references where useful. Do not use Mermaid.`;
+				: `Investigate the Flow candidate requested by the user. Trace its participants and ordered interactions through the source. Return one static ASCII sequence diagram inside a single fenced code block. Keep every diagram line under 80 characters by using short participant labels and concise messages. Follow it with a section titled exactly "Diagram annotations:" containing lines formatted exactly "- [1] Short title — explanation; source: path:line". Number annotations in diagram order. Draw branches that change the outcome and summarize smaller alternatives in annotations. Use only the active read-only tools and provide best-effort local path:line references where useful. Do not use Mermaid.`;
 
 		return {
 			message: {
@@ -259,18 +262,13 @@ export default function exploreExtension(pi: ExtensionAPI): void {
 			return;
 		}
 		if (stage !== "diagram" || flowCandidates.length === 0) return;
-
-		const { diagram, annotations } = parseDiagram(latestAssistantText);
-		const result = await ctx.ui.custom<"flows" | "exit">(
-			(tui, theme, _keybindings, done) => new DiagramViewer(tui, theme, diagram, annotations, done),
-			{ overlay: true, overlayOptions: { anchor: "center", width: 100, maxHeight: 40 } },
+		annotations = parseDiagram(latestAssistantText);
+		selectedAnnotation = 0;
+		showSelectedAnnotation(ctx);
+		ctx.ui.notify(
+			"Sequence diagram is in the transcript. Use /explore next or /explore previous to navigate annotations.",
+			"info",
 		);
-		if (result === "exit") {
-			leaveExplore(ctx, false);
-			ctx.ui.notify("Explore mode stopped. Previous tools restored.", "info");
-		} else if (result === "flows") {
-			await chooseFlow(ctx);
-		}
 	});
 
 	pi.on("session_before_switch", async (_event, ctx) => leaveExplore(ctx, false));

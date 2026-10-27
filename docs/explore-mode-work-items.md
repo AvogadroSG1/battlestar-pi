@@ -36,9 +36,9 @@ This handoff breaks down the MVP recorded in [ADR 0001](./adr/0001-exploration-u
 
 **Blocked by:** 02: Choose a flow and generate its sequence diagram.
 
-**Status:** implemented in `feat(coding-agent): add Flow selection and annotation navigation`
+**Status:** implemented in `feat(coding-agent): add native Explore annotation navigation`
 
-- [x] Up and down navigation selects the annotations associated with diagram elements without changing the diagram layout.
-- [x] The selected annotation's description is displayed below the diagram.
+- [x] Registered Ctrl+Alt+Up/Down shortcuts and `/explore previous` or `/explore next` select annotations without changing the transcript diagram.
+- [x] The diagram and full annotation list stay in the normal transcript; the selected annotation is shown in Pi's widget area above the editor.
 - [x] When supplied by the model, local source references are displayed as best-effort `path:line` citations; citations are not validated and do not need to open a file.
 - [x] The user can return to the Flow candidate list after reviewing annotations.
