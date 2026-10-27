@@ -22,13 +22,13 @@ This handoff breaks down the MVP recorded in [ADR 0001](./adr/0001-exploration-u
 
 **Blocked by:** 01: Start read-only repository exploration.
 
-**Status:** ready-for-agent
+**Status:** implemented in `feat(coding-agent): add Flow selection and annotation navigation`
 
-- [ ] The user can select a Flow candidate from the overview to start a second investigation through Pi's regular agent loop.
-- [ ] The selected flow is displayed as a static ASCII sequence diagram with its participants and ordered interactions.
-- [ ] Branches that change the flow's outcome appear in the diagram; smaller alternatives are summarized in Diagram annotations.
-- [ ] The user can return to the overview and select a different Flow candidate without leaving exploration.
-- [ ] Read-only restrictions remain active while moving between the overview and sequence diagrams.
+- [x] The user can select a Flow candidate from the overview to start a second investigation through Pi's regular agent loop.
+- [x] The selected flow is displayed as a static ASCII sequence diagram with its participants and ordered interactions.
+- [x] Branches that change the flow's outcome appear in the diagram; smaller alternatives are summarized in Diagram annotations.
+- [x] The user can return to the overview and select a different Flow candidate without leaving exploration.
+- [x] Read-only restrictions remain active while moving between the overview and sequence diagrams.
 
 ## 03: Navigate diagram annotations
 
@@ -36,9 +36,9 @@ This handoff breaks down the MVP recorded in [ADR 0001](./adr/0001-exploration-u
 
 **Blocked by:** 02: Choose a flow and generate its sequence diagram.
 
-**Status:** ready-for-agent
+**Status:** implemented in `feat(coding-agent): add Flow selection and annotation navigation`
 
-- [ ] Up and down navigation selects the annotations associated with diagram elements without changing the diagram layout.
-- [ ] The selected annotation's description is displayed below the diagram.
-- [ ] When supplied by the model, local source references are displayed as best-effort `path:line` citations; citations are not validated and do not need to open a file.
-- [ ] The user can return to the Flow candidate list after reviewing annotations.
+- [x] Up and down navigation selects the annotations associated with diagram elements without changing the diagram layout.
+- [x] The selected annotation's description is displayed below the diagram.
+- [x] When supplied by the model, local source references are displayed as best-effort `path:line` citations; citations are not validated and do not need to open a file.
+- [x] The user can return to the Flow candidate list after reviewing annotations.
