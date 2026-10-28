@@ -5,11 +5,17 @@
 ### Added
 
 - Device-code login (for example GitHub Copilot) now opens the verification page and copies the code when you press Enter. Providers can turn either action off with `openBrowserOnConfirm: false` or `copyCodeOnConfirm: false` ([#9282](https://github.com/earendil-works/pi/issues/9282), [#9301](https://github.com/earendil-works/pi/pull/9301))
+- Plan mode example extension: `/plan` starts a planning workflow with named phases, `plan_phase` moves between them, and the Continue/Exit menu ends it. `/plan-execute` exits plan mode once the plan is ready.
+- Plan mode example extension: readiness assessment with `plan_readiness` (the user agrees with or overrides a grill/ticket recommendation), grilling through `grill-with-docs`, and `plan_confirm` for the desired outcome and system model before ticketing. Returning to grilling from ticketing needs a reason and requires tickets to be reviewed again.
+- Plan mode example extension: `plan_tickets` submits ticket drafts (tracer-bullet slices with Given/When/Then contracts, repository skill guidance, and blockers), has the user review and approve them, then publishes them as one Beads epic with child tickets and native blocker edges. When Beads is unusable, the tickets are written as Markdown files in `tickets/` and the user is told.
+- Plan mode example extension: `plan_schedule` derives the execution order from the tracker's ticket statuses and blocker edges, marks independent tickets as parallel, and asks the user to agree. `/plan-execute` then exits plan mode and builds the handoff text itself and starts a fresh session with `ctx.newSession` (the equivalent of `/handoff` then `/new`; it only checks that a `handoff` command and `newSession` are available, and does not run those commands), whose first message holds the approved schedule and ticket references.
+- Plan mode example extension: the `orchestrate` tool runs the handed-off tickets in the fresh session. It enforces a failing BDD contract before dispatch, dispatches only unblocked tickets, allows two help requests and two fix cycles per ticket, then joint framing and arbitration (with the user for destructive-data or security concerns), and closes verified tickets in Beads (`bd close`) or Markdown. The `/plan-execute` handoff carries the `orchestrate` init arguments.
 
 ### Changed
 
 - `pi update` for installs from the pi.dev installer no longer passes `--min-release-age=0` to `npm ci`. The release lockfile pins every package, so the flag had no effect, and security scanners that block it stopped the update ([#11262](https://github.com/earendil-works/pi/issues/11262))
 - `/model` and `/scoped-models` now show a model's name next to its ID when the name adds words the ID lacks, such as a renamed `models.json` override ([#5916](https://github.com/earendil-works/pi/issues/5916), [#11347](https://github.com/earendil-works/pi/pull/11347))
+- Replaced the plan-mode example's numbered `Plan:` extraction, `[DONE:n]` step tracking, and in-place execution with the collaborative phase workflow. `/todos` and the todo widget were removed.
 
 ### Fixed
 
