@@ -1,0 +1,3 @@
+[submodule "battlestar-oh-my-pi"]
+	path = battlestar-oh-my-pi
+	url = https://github.com/AvogadroSG1/battlestar-oh-my-pi.git

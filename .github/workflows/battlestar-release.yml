@@ -65,7 +65,6 @@ jobs:
     env:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
       VERSION: ${{ needs.verify.outputs.version }}
-      OUT_DIR: ${{ runner.temp }}/battlestar-release
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -91,6 +90,8 @@ jobs:
         run: npm run hydrate:model-data
 
       - name: Build battlestar binary
+        env:
+          OUT_DIR: ${{ runner.temp }}/battlestar-release
         run: |
           set -euo pipefail
           # --skip-install: dependencies were installed by the step above.
@@ -101,6 +102,8 @@ jobs:
             --out "${OUT_DIR}"
 
       - name: Smoke-test binary
+        env:
+          OUT_DIR: ${{ runner.temp }}/battlestar-release
         run: |
           set -euo pipefail
           extract_dir="$(mktemp -d)"
