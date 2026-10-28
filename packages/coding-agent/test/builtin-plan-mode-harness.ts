@@ -45,6 +45,7 @@ type AnyHandler = (event: unknown, ctx: ExtensionContext) => unknown;
 type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void> | void;
 interface RegisteredTool {
 	name: string;
+	defaultActive?: boolean;
 	execute: (
 		id: string,
 		params: unknown,

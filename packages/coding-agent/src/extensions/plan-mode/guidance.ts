@@ -17,7 +17,6 @@ Restrictions:
 - Bash is restricted to an allowlist of read-only commands
 
 Ask clarifying questions using the questionnaire tool.
-Use brave-search skill via bash for web research.
 Call plan_phase to move the workflow to the next phase.`;
 
 	const sections = [base, phaseGuidance(session), renderCoreSkills(PHASE_CORE_SKILLS[session.phase] ?? [])];

@@ -83,7 +83,7 @@ The pinned copy changes only when you run `npm run sync:core-skills` from the re
 
 ## Lifecycle
 
-1. `/plan <request>` enables plan mode, disables `edit` and `write`, keeps other active tools, and sends the agent its first planning step with the request.
+1. `/plan <request>` enables plan mode, disables `edit` and `write`, keeps other active tools, activates the `plan_*` workflow tools, and sends the agent its first planning step with the request. Outside plan mode, the `plan_*` tools are inactive.
 2. While active, every user prompt gets the plan-mode context, and bash commands outside the allowlist are blocked.
 3. When the phase is `ready`, the agent's turn ends with a menu:
    - Execute and clear context: sends `/plan-execute`.
@@ -120,7 +120,7 @@ Blocked commands:
 
 ## Orchestration
 
-The `orchestrate` tool runs the handed-off tickets in the fresh session. Its state (the tracker, and each ticket's status and counters) is saved as a `plan-orchestration` session entry and restored on resume. The orchestration rules are added to each prompt while an orchestration is active, and to the handoff prompt that starts the fresh session. They are never added while plan mode is active.
+The `orchestrate` tool runs the handed-off tickets in the fresh session. It is inactive until the handoff prompt arrives or a saved orchestration is restored. Its state (the tracker, and each ticket's status and counters) is saved as a `plan-orchestration` session entry and restored on resume. The orchestration rules are added to each prompt while an orchestration is active, and to the handoff prompt that starts the fresh session. They are never added while plan mode is active.
 
 Actions (`action`, plus `ticketId` where noted):
 

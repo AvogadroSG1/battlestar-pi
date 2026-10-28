@@ -33,6 +33,7 @@
 - `/model` and `/scoped-models` now show a model's name next to its ID when the name adds words the ID lacks, such as a renamed `models.json` override ([#5916](https://github.com/earendil-works/pi/issues/5916), [#11347](https://github.com/earendil-works/pi/pull/11347))
 - The collaborative phase workflow is now a built-in extension (`src/extensions/plan-mode/`) instead of a replacement for the plan-mode example. The upstream example is restored unchanged, with its numbered `Plan:` steps, `[DONE:n]` tracking, and `/todos`. `-builtin:plan-mode` in `extensions` turns the built-in off.
 - Extension commands that share a name with a built-in command (such as `/plan` when the upstream plan-mode example is also installed) are reported as an error on the later extension. The built-in keeps the bare name; other duplicate commands keep the `name:N` suffixes.
+- Plan mode's workflow tools (`plan_readiness`, `plan_confirm`, `plan_phase`, `plan_tickets`, `plan_schedule`) are active only while plan mode is on, and `orchestrate` only after a plan handoff or a restored orchestration, so ordinary sessions no longer carry them. The plan-mode context no longer tells the agent to use a `brave-search` skill.
 
 ### Fixed
 
