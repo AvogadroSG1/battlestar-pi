@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build pi binaries for all platforms locally.
+# Build battlestar binaries for all platforms locally.
 # Mirrors .github/workflows/build-binaries.yml
 #
 # Usage:
@@ -15,12 +15,12 @@
 #
 # Output:
 #   packages/coding-agent/binaries/
-#     pi-darwin-arm64.tar.gz
-#     pi-darwin-x64.tar.gz
-#     pi-linux-x64.tar.gz
-#     pi-linux-arm64.tar.gz
-#     pi-windows-x64.zip
-#     pi-windows-arm64.zip
+#     battlestar-darwin-arm64.tar.gz
+#     battlestar-darwin-x64.tar.gz
+#     battlestar-linux-x64.tar.gz
+#     battlestar-linux-arm64.tar.gz
+#     battlestar-windows-x64.zip
+#     battlestar-windows-arm64.zip
 
 set -euo pipefail
 
@@ -130,9 +130,9 @@ for platform in "${PLATFORMS[@]}"; do
     # standalone binary before pi starts (see #7684). Disable cwd .env autoload so
     # project env files do not leak into pi's environment (see #10473).
     if [[ "$platform" == windows-* ]]; then
-        bun build --compile --no-compile-autoload-bunfig --no-compile-autoload-dotenv --target="$bun_target" ./dist/bun/cli.js ./src/utils/image-resize-worker.ts ./src/extensions/codemode/worker.ts --outfile "$OUTPUT_DIR/$platform/pi.exe"
+        bun build --compile --no-compile-autoload-bunfig --no-compile-autoload-dotenv --target="$bun_target" ./dist/bun/cli.js ./src/utils/image-resize-worker.ts ./src/extensions/codemode/worker.ts --outfile "$OUTPUT_DIR/$platform/battlestar.exe"
     else
-        bun build --compile --no-compile-autoload-bunfig --no-compile-autoload-dotenv --target="$bun_target" ./dist/bun/cli.js ./src/utils/image-resize-worker.ts ./src/extensions/codemode/worker.ts --outfile "$OUTPUT_DIR/$platform/pi"
+        bun build --compile --no-compile-autoload-bunfig --no-compile-autoload-dotenv --target="$bun_target" ./dist/bun/cli.js ./src/utils/image-resize-worker.ts ./src/extensions/codemode/worker.ts --outfile "$OUTPUT_DIR/$platform/battlestar"
     fi
 done
 
@@ -151,6 +151,7 @@ for platform in "${PLATFORMS[@]}"; do
     cp -r dist/core/export-html "$OUTPUT_DIR/$platform/"
     cp -r docs "$OUTPUT_DIR/$platform/"
     cp -r examples "$OUTPUT_DIR/$platform/"
+    cp -r core-skills "$OUTPUT_DIR/$platform/"
 
     # Copy the selected architecture's native platform helpers next to the executable.
     native_platform="${platform/windows-/win32-}"
@@ -165,12 +166,12 @@ cd "$OUTPUT_DIR"
 for platform in "${PLATFORMS[@]}"; do
     if [[ "$platform" == windows-* ]]; then
         # Windows (zip)
-        echo "Creating pi-$platform.zip..."
-        (cd "$platform" && zip -r ../pi-$platform.zip .)
+        echo "Creating battlestar-$platform.zip..."
+        (cd "$platform" && zip -r ../battlestar-$platform.zip .)
     else
         # Unix platforms (tar.gz) - use wrapper directory for mise compatibility
-        echo "Creating pi-$platform.tar.gz..."
-        mv "$platform" pi && tar -czf pi-$platform.tar.gz pi && mv pi "$platform"
+        echo "Creating battlestar-$platform.tar.gz..."
+        mv "$platform" battlestar && tar -czf battlestar-$platform.tar.gz battlestar && mv battlestar "$platform"
     fi
 done
 
@@ -179,9 +180,9 @@ echo "==> Extracting archives for testing..."
 for platform in "${PLATFORMS[@]}"; do
     rm -rf "$platform"
     if [[ "$platform" == windows-* ]]; then
-        mkdir -p "$platform" && (cd "$platform" && unzip -q ../pi-$platform.zip)
+        mkdir -p "$platform" && (cd "$platform" && unzip -q ../battlestar-$platform.zip)
     else
-        tar -xzf pi-$platform.tar.gz && mv pi "$platform"
+        tar -xzf battlestar-$platform.tar.gz && mv battlestar "$platform"
     fi
 done
 
@@ -193,8 +194,8 @@ echo ""
 echo "Extracted directories for testing:"
 for platform in "${PLATFORMS[@]}"; do
     if [[ "$platform" == windows-* ]]; then
-        echo "  $OUTPUT_DIR/$platform/pi.exe"
+        echo "  $OUTPUT_DIR/$platform/battlestar.exe"
     else
-        echo "  $OUTPUT_DIR/$platform/pi"
+        echo "  $OUTPUT_DIR/$platform/battlestar"
     fi
 done

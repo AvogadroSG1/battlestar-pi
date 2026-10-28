@@ -61,6 +61,8 @@ export interface PublishResult {
 	markdownDir?: string;
 	/** Set for the Markdown fallback: why Beads was not used. */
 	fallbackReason?: string;
+	/** Set for Beads: the git root that bd ran in. Later bd commands for the plan run there. */
+	root?: string;
 }
 
 const BDD_SCENARIO = /\bgiven\b[\s\S]*\bwhen\b[\s\S]*\bthen\b/i;
@@ -236,6 +238,11 @@ export async function publishTickets(request: PublishRequest): Promise<PublishRe
 	return { tracker: "beads", epicId, ticketIds };
 }
 
+/** Writes the tickets as Markdown without trying Beads. Used when the tracker choice is Markdown. */
+export function publishMarkdown(request: Omit<PublishRequest, "exec"> & { fallbackReason: string }): PublishResult {
+	return writeMarkdown(request.epic, orderForPublication(request.drafts), request.markdownDir, request.fallbackReason);
+}
+
 async function runBd(exec: CommandRunner, args: string[]): Promise<CommandOutput> {
 	try {
 		return await exec("bd", args);
@@ -244,7 +251,7 @@ async function runBd(exec: CommandRunner, args: string[]): Promise<CommandOutput
 	}
 }
 
-function failureText(output: CommandOutput): string {
+export function failureText(output: CommandOutput): string {
 	return (output.stderr || output.stdout).trim() || `exit code ${output.code}`;
 }
 

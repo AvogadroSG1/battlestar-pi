@@ -94,16 +94,10 @@ export async function getLatestPiVersion(
 	return (await getLatestPiRelease(currentVersion, options))?.version;
 }
 
-export async function checkForNewPiVersion(currentVersion: string): Promise<LatestPiRelease | undefined> {
-	if (process.env.PI_SKIP_VERSION_CHECK) return undefined;
-
-	try {
-		const latestRelease = await getLatestPiRelease(currentVersion);
-		if (latestRelease && isNewerPackageVersion(latestRelease.version, currentVersion)) {
-			return latestRelease;
-		}
-		return undefined;
-	} catch {
-		return undefined;
-	}
+/**
+ * Upstream update notices are off. The harness owns its upgrades through Homebrew (`battlestar update self`),
+ * so no session asks pi.dev whether a newer upstream pi exists.
+ */
+export async function checkForNewPiVersion(_currentVersion: string): Promise<LatestPiRelease | undefined> {
+	return undefined;
 }

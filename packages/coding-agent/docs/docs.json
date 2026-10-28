@@ -99,6 +99,10 @@
             {
               "title": "Connect MCP Servers",
               "path": "mcp.md"
+            },
+            {
+              "title": "Plan Mode",
+              "path": "plan-mode.md"
             }
           ]
         },

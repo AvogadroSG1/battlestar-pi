@@ -24,7 +24,7 @@ import { SessionManager } from "../../src/core/session-manager.ts";
 import type { Settings } from "../../src/core/settings-manager.ts";
 import { SettingsManager } from "../../src/core/settings-manager.ts";
 import type { InlineExtension, ResourceLoader } from "../../src/index.ts";
-import { theme } from "../../src/modes/interactive/theme/theme.ts";
+import { initTheme, theme } from "../../src/modes/interactive/theme/theme.ts";
 import {
 	type CreateTestExtensionsResultInput,
 	createTestExtensionsResult,
@@ -73,6 +73,8 @@ export function getToolResult(harness: Harness, toolName: string): ToolResultMes
 
 /** An extension UI context that does nothing, with `overrides` applied. */
 export function createTestUiContext(overrides: Partial<ExtensionUIContext> = {}): ExtensionUIContext {
+	// Real TUI sessions initialize the theme at startup; extensions read it from ctx.ui.theme in tui mode.
+	initTheme("dark");
 	return {
 		select: async () => undefined,
 		confirm: async () => false,

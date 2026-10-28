@@ -26,11 +26,13 @@ export interface HarnessOptions {
 	confirm?: (title: string, message: string) => boolean;
 	/** Names returned by pi.getCommands(). Default: ["handoff"]. */
 	slashCommands?: string[];
-	exec?: (command: string, args: string[]) => Promise<ExecResultLike> | ExecResultLike;
+	exec?: (command: string, args: string[], options?: { cwd?: string }) => Promise<ExecResultLike> | ExecResultLike;
 	entries?: unknown[];
 	cwd?: string;
 	/** When false, ctx.newSession is undefined (simulates /new being unavailable). Default: true. */
 	hasNewSession?: boolean;
+	/** Values returned by pi.getFlag(name), such as `{ plan: true }` for `--plan`. Default: none set. */
+	flags?: Record<string, boolean | string>;
 }
 
 export interface ToolResult {
@@ -88,9 +90,9 @@ export function setupPlanMode(options: HarnessOptions = {}) {
 	const appendEntry = vi.fn<ExtensionAPI["appendEntry"]>((customType, data) => {
 		entries.push({ type: "custom", customType, data });
 	});
-	const exec = vi.fn(async (command: string, args: string[]) => {
+	const exec = vi.fn(async (command: string, args: string[], execOptions?: { cwd?: string }) => {
 		const result = options.exec
-			? await options.exec(command, args)
+			? await options.exec(command, args, execOptions)
 			: { stdout: "", stderr: "unexpected exec", code: 1 };
 		return { killed: false, ...result };
 	});
@@ -107,7 +109,7 @@ export function setupPlanMode(options: HarnessOptions = {}) {
 		on(event: string, handler: AnyHandler) {
 			handlers.set(event, [...(handlers.get(event) ?? []), handler]);
 		},
-		getFlag: vi.fn(() => false),
+		getFlag: vi.fn((name: string) => options.flags?.[name] ?? false),
 		getActiveTools: vi.fn(() => [...activeTools]),
 		setActiveTools,
 		getCommands: vi.fn(() => (options.slashCommands ?? ["handoff"]).map((name) => ({ name }))),
@@ -175,9 +177,12 @@ export function setupPlanMode(options: HarnessOptions = {}) {
 
 	/** Runs every handler registered for `event` and returns their results in registration order. */
 	async function emit(event: string, payload: Record<string, unknown> = {}): Promise<unknown[]> {
+		// Real before_agent_start events carry the mutable prompt options; the plan-mode note writes to them.
+		const withPromptOptions =
+			event === "before_agent_start" ? { systemPromptOptions: { sections: {} }, ...payload } : payload;
 		const results: unknown[] = [];
 		for (const handler of handlers.get(event) ?? []) {
-			results.push(await handler({ type: event, ...payload }, ctx));
+			results.push(await handler({ type: event, ...withPromptOptions }, ctx));
 		}
 		return results;
 	}

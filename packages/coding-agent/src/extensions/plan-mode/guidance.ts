@@ -1,11 +1,11 @@
 /**
  * Plan-mode context injected before each user prompt. The base text holds the restrictions; the
- * phase guidance tells the agent what the current step needs. The grill-with-docs skill is named
- * only while grilling.
+ * phase guidance tells the agent what the current step needs; the phase's core skills (ADR 0002)
+ * follow it in full, since they are not registered as skills.
  */
 
-import { readPlanModeSkills } from "./skills.ts";
-import { CONFIRMATION_KINDS, CONFIRMATION_LABELS, type PlanSession } from "./workflow.ts";
+import { type CoreSkillName, renderCoreSkills } from "./core-skills.ts";
+import { CONFIRMATION_KINDS, CONFIRMATION_LABELS, type PlanPhase, type PlanSession } from "./workflow.ts";
 
 export function planContext(session: PlanSession): string {
 	const base = `[PLAN MODE ACTIVE]
@@ -16,33 +16,22 @@ Restrictions:
 - Other currently active tools remain available
 - Bash is restricted to an allowlist of read-only commands
 
-Plan Mode's bundled skills are private resources included below. Follow them directly; do not invoke /skill commands for them.
 Ask clarifying questions using the questionnaire tool.
 Call plan_phase to move the workflow to the next phase.`;
 
-	const guidance = phaseGuidance(session);
-	const skills = skillsForPhase(session.phase);
-	const skillGuidance = skills.length > 0 ? `Bundled skill guidance:\n\n${readPlanModeSkills(skills)}` : "";
-	return [base, guidance, skillGuidance].filter(Boolean).join("\n\n");
+	const sections = [base, phaseGuidance(session), renderCoreSkills(PHASE_CORE_SKILLS[session.phase] ?? [])];
+	return sections.filter((section) => section !== "").join("\n\n");
 }
 
-function skillsForPhase(phase: PlanSession["phase"]): string[] {
-	switch (phase) {
-		case "readiness":
-		case "confirming":
-			return ["grilling", "domain-modeling"];
-		case "grilling":
-			return ["grill-with-docs", "grilling", "domain-modeling"];
-		case "ticketing":
-			return ["to-tickets", "domain-modeling"];
-		case "reviewing":
-			return ["to-tickets"];
-		case "scheduling":
-		case "ready":
-			return [];
-	}
-	return [];
-}
+/** The core skills plan mode injects in each phase (ADR 0002). Scheduling carries none. */
+const PHASE_CORE_SKILLS: Partial<Record<PlanPhase, CoreSkillName[]>> = {
+	readiness: ["grilling", "domain-modeling"],
+	grilling: ["grill-with-docs", "grilling", "domain-modeling"],
+	confirming: ["grilling", "domain-modeling"],
+	ticketing: ["to-tickets"],
+	reviewing: ["to-tickets"],
+	ready: ["handoff"],
+};
 
 function phaseGuidance(session: PlanSession): string {
 	switch (session.phase) {
@@ -65,19 +54,19 @@ function phaseGuidance(session: PlanSession): string {
 	}
 }
 
-const READINESS_GUIDANCE = `Readiness: decide whether this request can go straight to ticketing or needs requirements discovery first. Use the bundled grilling guidance to judge readiness, and the domain-modeling guidance for domain terms.
+const READINESS_GUIDANCE = `Readiness: decide whether this request can go straight to ticketing or needs requirements discovery first. Use the bundled grilling skill below to judge readiness, and the bundled domain-modeling skill for domain terms.
 Explain your recommendation to the user, then call plan_readiness with recommendation "grill" (requirements are unclear or undecided) or "ticket" (the request is already specific), and a one-line rationale. The tool asks the user to agree or choose the other path.`;
 
 function grillingGuidance(returnReason: string | undefined): string {
 	const returned = returnReason
 		? `The workflow returned to grilling because ${returnReason}. Resolve that first.\n`
 		: "";
-	return `Grilling: work out the requirements with the bundled grill-with-docs guidance. Do not write a numbered plan.
+	return `Grilling: work out the requirements with the bundled grill-with-docs skill below, which uses the bundled grilling and domain-modeling skills below. Do not write a numbered plan.
 ${returned}When the desired outcome and constraints are settled, and the system and domain model is clear, call plan_confirm with kind "outcome" and kind "system_model", each with a short summary. Then call plan_phase with phase "ticketing".`;
 }
 
 function confirmingGuidance(session: PlanSession): string {
-	return `Confirming: check the shared understanding with the user before ticketing. Use the bundled grilling and domain-modeling guidance to restate it.
+	return `Confirming: check the shared understanding with the user before ticketing. Use the bundled grilling and domain-modeling skills below to restate it.
 Call plan_confirm with kind "outcome" (the desired outcome and constraints) and kind "system_model" (the relevant system and domain model), each with a short summary. A declined summary sends the workflow back to grilling.
 ${confirmationStatus(session)}
 When both are confirmed, call plan_phase with phase "ticketing".`;
@@ -87,7 +76,7 @@ function ticketingGuidance(session: PlanSession): string {
 	const review = session.reReviewRequired
 		? "Tickets drafted before the last return to grilling must be submitted again before publication.\n"
 		: "";
-	return `Ticketing: draft the tickets with the bundled to-tickets guidance as vertical tracer-bullet slices, each with explicit blockers. Publish them only through plan_tickets.
+	return `Ticketing: draft the tickets with the bundled to-tickets skill below as vertical tracer-bullet slices, each with explicit blockers.
 Submit the drafts with plan_tickets, action "submit_drafts", an epic {title, outcome}, and drafts. Each draft has:
 - key: short unique key that blockedBy uses
 - title and whatToBuild: the end-to-end behavior the slice makes work, from the user's perspective
@@ -114,7 +103,7 @@ const SCHEDULING_GUIDANCE = `Scheduling: the tickets are published. Call plan_sc
 Present the order to the user: which tickets run first, and which run in parallel. Tickets run in parallel only when they are independent, with no blocker edge between them. Never mark a blocked ticket as parallel with its blocker.
 Then ask the user to agree the order and call plan_schedule with action "agree". The tool asks the user to confirm. If they decline, revise the order with them and call plan_schedule with action "propose" again.`;
 
-const READY_GUIDANCE = `Ready: the schedule is agreed. Do not implement anything in plan mode. Call /plan-execute to hand off to a fresh session that carries the agreed schedule.`;
+const READY_GUIDANCE = `Ready: the schedule is agreed. Do not implement anything in plan mode, and do not write a handoff document yourself. The bundled handoff skill below describes what the fresh session needs to pick up the work. /plan-execute writes that handoff from the agreed schedule and tickets, and only the user can run it (or choose "Execute and clear context"). Summarize what the fresh session will do, then ask the user to run /plan-execute.`;
 
 function confirmationStatus(session: PlanSession): string {
 	const lines = CONFIRMATION_KINDS.map((kind) => {

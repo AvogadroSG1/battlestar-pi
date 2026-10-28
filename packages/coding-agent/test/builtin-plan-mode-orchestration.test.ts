@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { closeInTracker, type Finding, Orchestrator } from "../src/extensions/plan-mode/orchestration.ts";
 import { publishTickets } from "../src/extensions/plan-mode/tickets.ts";
-import { fakeBd } from "./plan-mode-fake-bd.ts";
-import { setupPlanMode } from "./plan-mode-harness.ts";
+import { fakeBd } from "./builtin-plan-mode-fake-bd.ts";
+import { setupPlanMode } from "./builtin-plan-mode-harness.ts";
 
 // BDD contract for battlestar-pi-tkl.3: delegate implementation, verify tickets, resolve stuck work.
 //
@@ -28,7 +28,7 @@ import { setupPlanMode } from "./plan-mode-harness.ts";
 //     toJSON() / Orchestrator.fromJSON(json)
 //   Finding = { severity: "low" | "medium" | "high"; message: string }
 //   Decision = { action: "close" | "fix" | "joint_framing" | "arbitrate" | "pause_for_user" | "resume"; ... }
-//   closeInTracker(exec, tracker, id): Promise<void>   tracker = { kind: "beads" } | { kind: "markdown", dir }
+//   closeInTracker(exec, tracker, id): Promise<void>   tracker = { kind: "beads", root } | { kind: "markdown", dir }
 // Tool: orchestrate { action, ticketId?, ... } wires the above for the agent.
 
 const tmpDirs: string[] = [];
@@ -349,10 +349,10 @@ describe("persistence and tracker closure", () => {
 		});
 		const id = published.ticketIds.a!;
 
-		await closeInTracker(bd.exec, { kind: "beads" }, id);
+		await closeInTracker(bd.exec, { kind: "beads", root: "/repo" }, id);
 
 		expect(bd.issues.get(id)?.status).toBe("closed");
-		await expect(closeInTracker(bd.exec, { kind: "beads" }, "nope")).rejects.toThrow();
+		await expect(closeInTracker(bd.exec, { kind: "beads", root: "/repo" }, "nope")).rejects.toThrow();
 	});
 
 	it("marks a Markdown ticket complete", async () => {
@@ -391,7 +391,7 @@ describe("orchestrate tool", () => {
 		const bd = fakeBd();
 		bd.issues.set("a", { title: "Title a", status: "open" });
 		const h = setupPlanMode({ exec: bd.exec });
-		await h.runTool("orchestrate", { action: "init", tickets, tracker: { kind: "beads" } });
+		await h.runTool("orchestrate", { action: "init", tickets, tracker: { kind: "beads", root: "/repo" } });
 		return { h, bd };
 	}
 

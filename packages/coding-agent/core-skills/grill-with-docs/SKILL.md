@@ -4,4 +4,4 @@ description: A relentless interview to sharpen a plan or design, which also crea
 disable-model-invocation: true
 ---
 
-Use the bundled grilling and domain-modeling guidance below in order. Do not invoke skill commands for these private resources.
+Call the Skill tool twice, for "grilling" and "domain-modeling".

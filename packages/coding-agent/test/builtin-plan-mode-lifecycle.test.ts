@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { fakeBd } from "./plan-mode-fake-bd.ts";
-import { setupPlanMode } from "./plan-mode-harness.ts";
+import { fakeBd } from "./builtin-plan-mode-fake-bd.ts";
+import { setupPlanMode } from "./builtin-plan-mode-harness.ts";
 
 // BDD contract for battlestar-pi-tkl.2: plan-mode entry, lifecycle, and exit choices.
 
@@ -12,13 +12,25 @@ function pick(label: string) {
 }
 
 describe("plan mode lifecycle", () => {
-	it("keeps workflow tools inactive until their mode needs them", async () => {
-		const h = setupPlanMode();
+	it("keeps workflow tools inactive until plan mode needs them, and removes them on exit", async () => {
+		const h = setupPlanMode({ select: pick(EXIT) });
 
 		expect([...h.tools.values()].every((tool) => tool.defaultActive === false)).toBe(true);
 		await h.runCommand("plan");
 		expect(h.activeTools()).toContain("plan_tickets");
 		expect(h.activeTools()).not.toContain("orchestrate");
+
+		await h.runCommand("plan");
+		expect(h.activeTools()).not.toContain("plan_tickets");
+	});
+
+	it("activates only the orchestration tool for a plan handoff", async () => {
+		const h = setupPlanMode();
+
+		await h.emit("before_agent_start", { messageType: "user", prompt: "PLAN HANDOFF\nStart the tickets." });
+
+		expect(h.activeTools()).toContain("orchestrate");
+		expect(h.activeTools()).not.toContain("plan_tickets");
 	});
 
 	describe("given a user invokes /plan", () => {
@@ -56,15 +68,6 @@ describe("plan mode lifecycle", () => {
 			expect((blocked as { block?: boolean }).block).toBe(true);
 			expect(allowed).toBeUndefined();
 		});
-	});
-
-	it("activates only the orchestration tool for a plan handoff", async () => {
-		const h = setupPlanMode();
-
-		await h.emit("before_agent_start", { messageType: "user", prompt: "PLAN HANDOFF\nStart the tickets." });
-
-		expect(h.activeTools()).toContain("orchestrate");
-		expect(h.activeTools()).not.toContain("plan_tickets");
 	});
 
 	describe("given plan mode is active", () => {

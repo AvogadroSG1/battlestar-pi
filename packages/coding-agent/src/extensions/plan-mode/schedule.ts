@@ -20,7 +20,7 @@ export interface Schedule {
 	ready: string[];
 }
 
-export type TrackerRef = { kind: "beads"; epicId: string } | { kind: "markdown"; dir: string };
+export type TrackerRef = { kind: "beads"; epicId: string; root: string } | { kind: "markdown"; dir: string };
 
 interface BeadsRow {
 	id: string;
@@ -118,12 +118,17 @@ export function buildHandoff(input: {
 	request: string;
 }): string {
 	const location =
-		input.tracker.kind === "beads" ? `Beads epic ${input.tracker.epicId}` : `Markdown directory ${input.tracker.dir}`;
+		input.tracker.kind === "beads"
+			? `Beads epic ${input.tracker.epicId} in ${input.tracker.root}`
+			: `Markdown directory ${input.tracker.dir}`;
 	const open = input.issues.filter((issue) => issue.status !== "closed");
 	const init = {
 		action: "init",
 		tickets: open.map((issue) => ({ id: issue.id, blockedBy: issue.blockedBy })),
-		tracker: input.tracker.kind === "beads" ? { kind: "beads" } : { kind: "markdown", dir: input.tracker.dir },
+		tracker:
+			input.tracker.kind === "beads"
+				? { kind: "beads", root: input.tracker.root }
+				: { kind: "markdown", dir: input.tracker.dir },
 	};
 	return [
 		HANDOFF_HEADER,

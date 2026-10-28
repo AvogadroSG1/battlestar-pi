@@ -54,7 +54,7 @@ export interface Finding {
 
 export type FramingConcern = "none" | "destructive-data" | "security";
 
-export type OrchestrationTracker = { kind: "beads" } | { kind: "markdown"; dir: string };
+export type OrchestrationTracker = { kind: "beads"; root: string } | { kind: "markdown"; dir: string };
 
 export type Decision =
 	| ReviewDecision

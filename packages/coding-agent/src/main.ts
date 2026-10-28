@@ -33,7 +33,7 @@ import { listModels } from "./cli/list-models.ts";
 import { createProjectTrustContext } from "./cli/project-trust.ts";
 import { selectSession } from "./cli/session-picker.ts";
 import { shouldRunFirstTimeSetup, showFirstTimeSetup, showStartupSelector } from "./cli/startup-ui.ts";
-import { APP_NAME, ENV_SESSION_DIR, expandTildePath, getAgentDir, getPackageDir, VERSION } from "./config.ts";
+import { APP_NAME, ENV_SESSION_DIR, expandTildePath, getAgentDir, getPackageDir, HARNESS_VERSION } from "./config.ts";
 import { type CreateAgentSessionRuntimeFactory, createAgentSessionRuntime } from "./core/agent-session-runtime.ts";
 import {
 	type AgentSessionRuntimeDiagnostic,
@@ -63,6 +63,7 @@ import { printTimings, resetTimings, time } from "./core/timings.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
 import { builtInExtensions } from "./extensions/index.ts";
 import { loadMcpCommand } from "./extensions/mcp/cli.lazy.ts";
+import { runHarnessFirstRun } from "./harness-first-run.ts";
 import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
 import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.ts";
 import { initTheme, setThemeJsonValidator, stopThemeWatcher } from "./modes/interactive/theme/theme.ts";
@@ -572,6 +573,7 @@ export interface MainOptions {
 }
 
 export async function main(args: string[], options?: MainOptions) {
+	runHarnessFirstRun();
 	resetTimings();
 	// Commands and startup selectors can load user-authored themes before runtime creation.
 	setThemeJsonValidator(validateThemeJson);
@@ -579,7 +581,6 @@ export async function main(args: string[], options?: MainOptions) {
 	const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env.PI_OFFLINE);
 	if (offlineMode) {
 		process.env.PI_OFFLINE = "1";
-		process.env.PI_SKIP_VERSION_CHECK = "1";
 	}
 
 	if (await runAuthCommand(args)) {
@@ -633,7 +634,7 @@ export async function main(args: string[], options?: MainOptions) {
 	time("parseArgs");
 
 	if (parsed.version) {
-		console.log(VERSION);
+		console.log(HARNESS_VERSION);
 		process.exit(0);
 	}
 

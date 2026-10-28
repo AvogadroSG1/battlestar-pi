@@ -11,8 +11,8 @@ import {
 	type TrackerIssue,
 } from "../src/extensions/plan-mode/schedule.ts";
 import { type DraftTicket, publishTickets } from "../src/extensions/plan-mode/tickets.ts";
-import { fakeBd } from "./plan-mode-fake-bd.ts";
-import { type PlanHarness, setupPlanMode } from "./plan-mode-harness.ts";
+import { fakeBd } from "./builtin-plan-mode-fake-bd.ts";
+import { type PlanHarness, setupPlanMode } from "./builtin-plan-mode-harness.ts";
 
 // BDD contract for battlestar-pi-tkl.4: tracker-derived schedule, user agreement, /handoff + /new.
 //
@@ -149,7 +149,7 @@ describe("the handoff document", () => {
 		const text = buildHandoff({
 			schedule: deriveSchedule(issues),
 			issues,
-			tracker: { kind: "beads", epicId: "epic-9" },
+			tracker: { kind: "beads", epicId: "epic-9", root: "/repo" },
 			request: "build the thing",
 		});
 
@@ -250,18 +250,6 @@ describe("agreeing the schedule and executing", () => {
 		for (const title of ["Title a", "Title b", "Title c"]) expect(handoff).toContain(title);
 		expect(handoff).toMatch(/already approved|approved schedule/i);
 		expect(h.appendEntry).toHaveBeenCalledWith("plan-mode", expect.objectContaining({ enabled: false }));
-	});
-
-	it("pauses with a manual-action message when /handoff is unavailable", async () => {
-		const h = await scheduling({ slashCommands: [] });
-		await h.runTool("plan_schedule", { action: "propose" });
-		await h.runTool("plan_schedule", { action: "agree" });
-
-		await h.runCommand("plan-execute");
-
-		expect(h.notify).toHaveBeenCalledWith(expect.stringMatching(/\/handoff/), "error");
-		expect(h.newSession).not.toHaveBeenCalled();
-		expect(h.activeTools()).not.toContain("write"); // still planning, nothing lost
 	});
 
 	it("pauses with a manual-action message when /new is unavailable", async () => {

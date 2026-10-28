@@ -6,6 +6,7 @@
 
 import { StringEnum } from "@earendil-works/pi-ai";
 import { type Static, Type } from "typebox";
+import { type CoreSkillName, renderCoreSkills } from "./core-skills.ts";
 import {
 	closeInTracker,
 	type Decision,
@@ -19,7 +20,6 @@ import {
 	type OrchestratorSnapshot,
 	type ReviewDecision,
 } from "./orchestration.ts";
-import { readPlanModeSkills } from "./skills.ts";
 import type { CommandRunner } from "./tickets.ts";
 
 export const ORCHESTRATION_ENTRY = "plan-orchestration";
@@ -59,6 +59,7 @@ export const orchestrateParams = Type.Object({
 		Type.Object({
 			kind: StringEnum(["beads", "markdown"]),
 			dir: Type.Optional(Type.String({ description: "markdown: directory holding the ticket files" })),
+			root: Type.Optional(Type.String({ description: "beads: the git root bd runs from, from the handoff" })),
 		}),
 	),
 	testPath: Type.Optional(Type.String({ description: "red_contract: the failing BDD test file" })),
@@ -154,7 +155,7 @@ export async function runOrchestrate(
 				result: report(
 					orchestration,
 					o.status(id),
-					`Red contract recorded for ${id}: ${params.testPath} must fail now and pass when the ticket is done.\nAcceptance: ${params.acceptance}\nUse the bundled TDD guidance to write the failing test first, confirm it fails, then dispatch ${id}.`,
+					`Red contract recorded for ${id}: ${params.testPath} must fail now and pass when the ticket is done.\nAcceptance: ${params.acceptance}\nWrite the failing test first (the bundled tdd skill), confirm it fails, then dispatch ${id}.`,
 				),
 			};
 		}
@@ -168,7 +169,7 @@ export async function runOrchestrate(
 				result: report(
 					orchestration,
 					o.status(id),
-					`Dispatched ${id} to an implementor.\nGive it the ticket in the tracker, its red contract (${contract?.testPath}: ${contract?.acceptance}), and these rules: make the test pass without editing it; self-check with the bundled code-review guidance; call orchestrate submit_work when done; ask for help only when blocked.\n${readyText(orchestration)}`,
+					`Dispatched ${id} to an implementor.\nGive it the ticket in the tracker, its red contract (${contract?.testPath}: ${contract?.acceptance}), and these rules: make the test pass without editing it (the bundled tdd skill); self-check with the bundled code-review skill; call orchestrate submit_work when done; ask for help only when blocked.\n${readyText(orchestration)}`,
 				),
 			};
 		}
@@ -178,7 +179,7 @@ export async function runOrchestrate(
 			const { granted, remaining } = o.requestHelp(id);
 			const text = granted
 				? `Orchestrator help granted for ${id} (${remaining} request${remaining === 1 ? "" : "s"} left). Answer the implementor's question, then let it continue.`
-				: `Help budget used up for ${id} (${HELP_LIMIT} of ${HELP_LIMIT} requests). Do not ask again: the implementor finishes the attempt, submits the work, and review decides. Diagnose the blocker with the bundled diagnosing-bugs guidance.`;
+				: `Help budget used up for ${id} (${HELP_LIMIT} of ${HELP_LIMIT} requests). Do not ask again: the implementor finishes the attempt, submits the work, and review decides. Diagnose the blocker with the bundled diagnosing-bugs skill.`;
 			return { orchestration, result: report(orchestration, o.status(id), text, { granted, remaining }) };
 		}
 
@@ -190,7 +191,7 @@ export async function runOrchestrate(
 				result: report(
 					orchestration,
 					o.status(id),
-					`Work submitted for ${id}. Verify it with the bundled code-review guidance against the red contract and its acceptance scenario, then call orchestrate review with the findings (an empty list when it is clean).`,
+					`Work submitted for ${id}. Verify it with the bundled code-review skill against the red contract and its acceptance scenario, then call orchestrate review with the findings (an empty list when it is clean).`,
 				),
 			};
 		}
@@ -258,12 +259,13 @@ function initialize(params: OrchestrateParams): Orchestration {
 		throw new Error("init needs tickets: [{ id, blockedBy }] for the open tickets of the approved schedule.");
 	}
 	const tracker = params.tracker;
-	if (!tracker) throw new Error('init needs tracker: { kind: "beads" } or { kind: "markdown", dir }.');
+	if (!tracker) throw new Error('init needs tracker: { kind: "beads", root } or { kind: "markdown", dir }.');
 	if (tracker.kind === "markdown") {
 		if (!tracker.dir) throw new Error('init with a markdown tracker needs its directory: { kind: "markdown", dir }.');
 		return { tracker: { kind: "markdown", dir: tracker.dir }, orchestrator: new Orchestrator(params.tickets) };
 	}
-	return { tracker: { kind: "beads" }, orchestrator: new Orchestrator(params.tickets) };
+	if (!tracker.root) throw new Error('init with a beads tracker needs its git root: { kind: "beads", root }.');
+	return { tracker: { kind: "beads", root: tracker.root }, orchestrator: new Orchestrator(params.tickets) };
 }
 
 function requireTicketId(params: OrchestrateParams): string {
@@ -349,24 +351,23 @@ function framingText(orchestration: Orchestration, id: string, decision: Decisio
 	return arbitrationText(orchestration, id, decision.askUser, lead);
 }
 
+/** The core skills the orchestrating agent carries, injected with its rules (ADR 0002). */
+const ORCHESTRATION_SKILLS: CoreSkillName[] = ["tdd", "code-review", "diagnosing-bugs", "codebase-design", "beads"];
+
 /** Rules for the orchestrating agent. Injected before each prompt once orchestration is active. */
 export function orchestrationContext(): string {
-	const guidance = `[ORCHESTRATION]
+	return `[ORCHESTRATION]
 You orchestrate the tickets of the approved plan. The user already approved the schedule: do not ask for approval again.
-- Before dispatch, write the failing BDD test for each ticket using the bundled TDD guidance and record it with orchestrate red_contract.
+- Before dispatch, write the failing BDD test for each ticket (the tdd skill below) and record it with orchestrate red_contract.
 - Dispatch only tickets whose blockers are closed. Dispatch independent ready tickets in parallel.
 - An implementor may ask for orchestrator help at most 2 times per ticket.
-- Verify completed work with the bundled code-review guidance, then call orchestrate review with the findings. Medium or high findings go back for a fix: at most 2 ordinary fix cycles.
-- Stuck or failing work: use the bundled diagnosing-bugs guidance before escalating.
+- Verify completed work with the code-review skill below, then call orchestrate review with the findings. Medium or high findings go back for a fix: at most 2 ordinary fix cycles.
+- Stuck or failing work: diagnose with the diagnosing-bugs skill below before escalating.
 - After 2 fix cycles, joint framing: the implementor and you fill in and review ${JOINT_FRAMING_FILE}. An agreed pathway grants one more work/review cycle.
 - If no pathway is agreed, a fresh medium-reasoning arbitrator decides only from the joint brief. For destructive-data or security concerns, the arbitrator asks the user, and work stays paused until the answer is recorded.
 - Final reports for escalations go in docs/escalation/.
 - Close a verified ticket in the tracker (orchestrate close) before dispatching the tickets it unblocks.
-- Paused work stays paused until the decision is returned.`;
-	return `${guidance}\n\nBundled skill guidance (private to Plan Mode):\n\n${readPlanModeSkills([
-		"tdd",
-		"code-review",
-		"diagnosing-bugs",
-		"codebase-design",
-	])}`;
+- Paused work stays paused until the decision is returned.
+
+${renderCoreSkills(ORCHESTRATION_SKILLS)}`;
 }

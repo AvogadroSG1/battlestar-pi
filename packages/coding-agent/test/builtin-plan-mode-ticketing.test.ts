@@ -9,8 +9,8 @@ import {
 	renderTicketBody,
 	validateDrafts,
 } from "../src/extensions/plan-mode/tickets.ts";
-import { fakeBd } from "./plan-mode-fake-bd.ts";
-import { type PlanHarness, setupPlanMode } from "./plan-mode-harness.ts";
+import { fakeBd } from "./builtin-plan-mode-fake-bd.ts";
+import { type PlanHarness, setupPlanMode } from "./builtin-plan-mode-harness.ts";
 
 // BDD contract for battlestar-pi-tkl.5: draft, review, and publish dependency-aware tickets.
 //

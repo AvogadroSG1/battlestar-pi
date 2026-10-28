@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, test, vi } from "vitest";
 import { type Component, Container, type Focusable, type TUI } from "../../tui/src/tui.ts";
 import { TuiMainScreen } from "../../tui/src/tui-main-screen.ts";
 import { VirtualTerminal } from "../../tui/test/virtual-terminal.ts";
+import { CONFIG_DIR_NAME } from "../src/config.ts";
 import type { AutocompleteProviderFactory } from "../src/core/extensions/types.ts";
 import type { QuietStartup } from "../src/core/settings-manager.ts";
 import type { SourceInfo } from "../src/core/source-info.ts";
@@ -1263,7 +1264,10 @@ describe("InteractiveMode.showLoadedResources", () => {
 		const fakeThis = createShowLoadedResourcesThis({
 			quietStartup: false,
 			cwd,
-			contextFiles: [{ path: path.join(home, ".pi", "agent", "AGENTS.md") }, { path: path.join(cwd, "AGENTS.md") }],
+			contextFiles: [
+				{ path: path.join(home, CONFIG_DIR_NAME, "agent", "AGENTS.md") },
+				{ path: path.join(cwd, "AGENTS.md") },
+			],
 		});
 
 		(InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -1272,7 +1276,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 
 		const output = renderAll(fakeThis.loadedResourcesContainer).replace(/\\/g, "/");
 		expect(output).toContain("[Context]");
-		expect(output).toContain("~/.pi/agent/AGENTS.md, AGENTS.md");
+		expect(output).toContain(`~/${CONFIG_DIR_NAME}/agent/AGENTS.md, AGENTS.md`);
 		expect(output).not.toContain(`${cwd.replace(/\\/g, "/")}/AGENTS.md`);
 	});
 
@@ -1302,7 +1306,10 @@ describe("InteractiveMode.showLoadedResources", () => {
 			quietStartup: false,
 			toolOutputExpanded: true,
 			cwd,
-			contextFiles: [{ path: path.join(home, ".pi", "agent", "AGENTS.md") }, { path: path.join(cwd, "AGENTS.md") }],
+			contextFiles: [
+				{ path: path.join(home, CONFIG_DIR_NAME, "agent", "AGENTS.md") },
+				{ path: path.join(cwd, "AGENTS.md") },
+			],
 		});
 
 		(InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -1311,9 +1318,9 @@ describe("InteractiveMode.showLoadedResources", () => {
 
 		const output = renderAll(fakeThis.loadedResourcesContainer).replace(/\\/g, "/");
 		expect(output).toContain("[Context]");
-		expect(output).toContain("~/.pi/agent/AGENTS.md");
+		expect(output).toContain(`~/${CONFIG_DIR_NAME}/agent/AGENTS.md`);
 		expect(output).toContain("~/Development/pi-mono/AGENTS.md");
-		expect(output).not.toContain("~/.pi/agent/AGENTS.md, AGENTS.md");
+		expect(output).not.toContain(`~/${CONFIG_DIR_NAME}/agent/AGENTS.md, AGENTS.md`);
 	});
 
 	test("does not show verbose listing on quiet startup during reload", () => {

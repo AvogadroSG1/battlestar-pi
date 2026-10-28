@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type PlanHarness, setupPlanMode } from "./plan-mode-harness.ts";
+import { type PlanHarness, setupPlanMode } from "./builtin-plan-mode-harness.ts";
 
 // BDD contract for battlestar-pi-tkl.1: readiness assessment, grill-with-docs, mental-model confirmation.
 // Builds on battlestar-pi-tkl.2 (plan_phase tool, plan mode lifecycle). Phases:
@@ -67,14 +67,13 @@ describe("readiness assessment", () => {
 });
 
 describe("grilling uses the approved skills, not a separate plan mode", () => {
-	it("injects private grilling instructions only while grilling", async () => {
+	it("names the bundled grill-with-docs skill while grilling", async () => {
 		const h = await inPlanMode({ select: choose(GRILL) });
 		await h.runTool("plan_readiness", { recommendation: "grill", rationale: "unclear" });
 
 		const context = await h.injectedContext();
 
 		expect(context).toContain("grill-with-docs");
-		expect(context).toContain("Use the bundled grilling and domain-modeling guidance below in order.");
 		expect(context).not.toMatch(/^Plan:/m); // old numbered "Plan:" generation mode is gone
 	});
 
@@ -118,7 +117,7 @@ describe("mental-model confirmation before ticketing", () => {
 		await expect(h.runTool("plan_phase", { phase: "ticketing" })).rejects.toThrow(/outcome/i);
 	});
 
-	it("directs the agent to /skill:to-tickets once ticketing starts", async () => {
+	it("names the bundled to-tickets skill once ticketing starts", async () => {
 		const h = await inPlanMode();
 		await confirmBoth(h);
 		await h.runTool("plan_phase", { phase: "ticketing" });

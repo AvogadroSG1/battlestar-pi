@@ -17,6 +17,7 @@ on:
   push:
     tags:
       - 'v*.*.*'
+      - '!v*-bs.*'
   pull_request:
     branches: [main]
     paths:

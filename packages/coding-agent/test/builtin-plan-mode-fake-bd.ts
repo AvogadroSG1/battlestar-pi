@@ -1,4 +1,4 @@
-import type { ExecResultLike } from "./plan-mode-harness.ts";
+import type { ExecResultLike } from "./builtin-plan-mode-harness.ts";
 
 /**
  * In-memory fake of the `bd` CLI used by the plan-mode tests.
@@ -6,8 +6,9 @@ import type { ExecResultLike } from "./plan-mode-harness.ts";
  * Supports: `create` (records title/type/parent/description/skills, prints the new id),
  * `dep add <issue> --blocked-by <blocker>` (or positional), `create --deps`, `close <id>`,
  * and `list --parent <epic> --json` (real bd shape: dependencies[{depends_on_id, type}]).
- * Every other subcommand succeeds with `[]`. With `usable: false` every call fails like an
- * uninitialised database.
+ * Every other subcommand succeeds with `[]`. With `usable: false` every subcommand fails like an
+ * uninitialised database (`--version` still succeeds). `git rev-parse --show-toplevel` answers with
+ * the cwd, so every test directory is a git root and the tracker choice reaches Beads.
  */
 export interface FakeIssue {
 	title: string;
@@ -36,9 +37,16 @@ export function fakeBd(options: FakeBdOptions = {}) {
 		return i >= 0 ? args[i + 1] : undefined;
 	}
 
-	const exec = async (command: string, args: string[]): Promise<ExecResultLike> => {
+	const exec = async (command: string, args: string[], execOptions?: { cwd?: string }): Promise<ExecResultLike> => {
+		if (command === "git") {
+			return args.join(" ") === "rev-parse --show-toplevel" && execOptions?.cwd
+				? { stdout: `${execOptions.cwd}\n`, stderr: "", code: 0 }
+				: { stdout: "", stderr: "unexpected git command", code: 1 };
+		}
 		calls.push([command, ...args]);
-		if (command !== "bd" || options.usable === false) return { stdout: "", stderr: "bd: not initialized", code: 1 };
+		if (command !== "bd") return { stdout: "", stderr: "bd: not initialized", code: 1 };
+		if (args[0] === "--version") return { stdout: "bd version 1.3.2", stderr: "", code: 0 };
+		if (options.usable === false) return { stdout: "", stderr: "bd: not initialized", code: 1 };
 		const [sub, second] = args;
 		if (sub === "create") {
 			creates += 1;

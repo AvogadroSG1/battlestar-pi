@@ -15,9 +15,9 @@ import { join } from "node:path";
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { StringEnum, type TextContent } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import type { ExtensionAPI, ExtensionContext } from "../../core/extensions/types.ts";
 import { planContext } from "./guidance.ts";
 import {
 	ORCHESTRATION_CONTEXT,
@@ -40,7 +40,8 @@ import {
 	type TrackerIssue,
 	type TrackerRef,
 } from "./schedule.ts";
-import { type PublishResult, publishTickets, validateDrafts } from "./tickets.ts";
+import { type PublishResult, publishMarkdown, publishTickets, validateDrafts } from "./tickets.ts";
+import { type CwdCommandRunner, chooseTracker } from "./tracker-choice.ts";
 import { isSafeCommand } from "./utils.ts";
 import {
 	agreeSchedule,
@@ -122,6 +123,11 @@ const scheduleParams = Type.Object({ action: StringEnum(SCHEDULE_ACTIONS) });
 
 const NOT_ACTIVE = "Plan mode is not active. Start it with /plan first.";
 
+const PROPOSAL_TOOL = "propose_plan_mode";
+// Fixed text: the system prompt stays byte-identical across interactive turns.
+const PLAN_MODE_NOTE =
+	"Plan mode is the collaborative planning workflow for large, ambiguous, or cross-cutting work: it grills the requirements, drafts and publishes tickets, agrees a schedule, and hands off to a fresh session. The user starts it with /plan. When a request would benefit from planning, you may call propose_plan_mode with the request and a one-line reason; plan mode starts only if the user accepts.";
+
 /** Data of the latest custom session entry of this type, if any. */
 function lastEntryData<T>(ctx: ExtensionContext, customType: string): T | undefined {
 	const entry = ctx.sessionManager
@@ -142,7 +148,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	});
 
 	function updateStatus(ctx: ExtensionContext): void {
-		ctx.ui.setStatus("plan-mode", session ? ctx.ui.theme.fg("warning", `plan: ${session.phase}`) : undefined);
+		const text = session ? `plan: ${session.phase}` : undefined;
+		// Only the TUI initializes the theme; print, rpc, and SDK sessions get the plain text.
+		ctx.ui.setStatus("plan-mode", text && ctx.mode === "tui" ? ctx.ui.theme.fg("warning", text) : text);
 	}
 
 	function activateOrchestrationTool(): void {
@@ -171,7 +179,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	/** Makes `next` the live session and applies its planning tool set. Does not persist. */
 	function activate(ctx: ExtensionContext, next: PlanSession): void {
 		session = next;
-		const planTools = next.toolsBeforePlanMode.filter((name) => !WRITE_TOOLS[name]);
+		const planTools = next.toolsBeforePlanMode.filter((name) => !WRITE_TOOLS[name] && name !== PROPOSAL_TOOL);
 		pi.setActiveTools([...new Set([...planTools, ...PLAN_MODE_TOOLS])]);
 		updateStatus(ctx);
 	}
@@ -181,6 +189,14 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		session = next;
 		updateStatus(ctx);
 		persist();
+	}
+
+	/** The proposal tool is active only in interactive sessions outside plan mode. */
+	function syncProposalTool(ctx: ExtensionContext): void {
+		const wanted = ctx.mode === "tui" && !session;
+		const active = pi.getActiveTools();
+		if (active.includes(PROPOSAL_TOOL) === wanted) return;
+		pi.setActiveTools(wanted ? [...active, PROPOSAL_TOOL] : active.filter((name) => name !== PROPOSAL_TOOL));
 	}
 
 	function enterPlanMode(ctx: ExtensionContext): void {
@@ -200,6 +216,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		if (!session) return;
 		pi.setActiveTools(session.toolsBeforePlanMode);
 		session = undefined;
+		syncProposalTool(ctx);
 		updateStatus(ctx);
 		persist();
 	}
@@ -212,21 +229,32 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		if (confirmed) exitPlanMode(ctx);
 	}
 
+	const runAt: CwdCommandRunner = (command, args, cwd) => pi.exec(command, args, { cwd });
+
 	/** Reads the tickets from the tracker that published them, and names that tracker for the handoff. */
-	async function loadTracker(
-		ctx: ExtensionContext,
-		published: PublishResult,
-	): Promise<{ issues: TrackerIssue[]; tracker: TrackerRef }> {
+	async function loadTracker(published: PublishResult): Promise<{ issues: TrackerIssue[]; tracker: TrackerRef }> {
 		if (published.tracker === "beads") {
-			const issues = await readBeadsIssues(
-				(command, args) => pi.exec(command, args, { cwd: ctx.cwd }),
-				published.epicId,
-			);
-			return { issues, tracker: { kind: "beads", epicId: published.epicId } };
+			const root = published.root;
+			if (!root) throw new Error("The Beads tickets have no git root recorded. Publish them again.");
+			const issues = await readBeadsIssues((command, args) => runAt(command, args, root), published.epicId);
+			return { issues, tracker: { kind: "beads", epicId: published.epicId, root } };
 		}
 		const dir = published.markdownDir;
 		if (!dir) throw new Error("The Markdown tickets have no directory. Publish them again.");
 		return { issues: readMarkdownIssues(dir), tracker: { kind: "markdown", dir } };
+	}
+
+	/** Enters plan mode and sends the agent its first planning step. `deliverAs` queues that step behind a running turn. */
+	function startPlanMode(request: string, ctx: ExtensionContext, deliverAs?: "followUp"): void {
+		enterPlanMode(ctx);
+		pi.sendMessage(
+			{
+				customType: "plan-step",
+				content: `Plan mode started${request ? ` for: ${request}` : ""}.\nCurrent phase: readiness. Judge whether the request is ready for ticketing or needs grilling first, then call plan_readiness.`,
+				display: true,
+			},
+			{ triggerTurn: true, deliverAs },
+		);
 	}
 
 	async function togglePlanMode(request: string, ctx: ExtensionContext): Promise<void> {
@@ -236,15 +264,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			return;
 		}
 
-		enterPlanMode(ctx);
-		pi.sendMessage(
-			{
-				customType: "plan-step",
-				content: `Plan mode started${request ? ` for: ${request}` : ""}.\nCurrent phase: readiness. Judge whether the request is ready for ticketing or needs grilling first, then call plan_readiness.`,
-				display: true,
-			},
-			{ triggerTurn: true },
-		);
+		startPlanMode(request, ctx);
 	}
 
 	pi.registerCommand("plan", {
@@ -262,17 +282,14 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				);
 				return;
 			}
-			const names = pi.getCommands().map((command) => command.name);
-			const handoffAvailable = names.includes("handoff");
-			if (!handoffAvailable || typeof ctx.newSession !== "function") {
-				const manual = handoffAvailable ? "/new" : "/handoff";
+			if (typeof ctx.newSession !== "function") {
 				ctx.ui.notify(
-					`Plan mode stays on: run ${manual} yourself to start the fresh session with the agreed schedule.`,
+					"Plan mode stays on: run /new yourself to start the fresh session with the agreed schedule.",
 					"error",
 				);
 				return;
 			}
-			const { issues, tracker } = await loadTracker(ctx, session.published);
+			const { issues, tracker } = await loadTracker(session.published);
 			const epic = session.drafts?.epic;
 			const handoffText = buildHandoff({
 				schedule: deriveSchedule(issues),
@@ -291,6 +308,40 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	pi.registerShortcut(Key.ctrlAlt("p"), {
 		description: "Toggle plan mode",
 		handler: async (ctx) => togglePlanMode("", ctx),
+	});
+
+	pi.registerTool({
+		name: PROPOSAL_TOOL,
+		label: "Propose plan mode",
+		description:
+			"Offer the user plan mode for the current request, when large, ambiguous, or cross-cutting work would benefit from collaborative planning. Plan mode starts only if the user accepts. Not available while plan mode is active.",
+		promptSnippet: "Offer the user plan mode for a request that would benefit from planning",
+		parameters: Type.Object({
+			request: Type.String({ description: "The request to plan, as the user stated it" }),
+			reason: Type.String({ description: "One line on why planning would help" }),
+		}),
+		// Active only in interactive sessions outside plan mode; syncProposalTool manages it.
+		defaultActive: false,
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+			if (session) throw new Error("Plan mode is already active.");
+			const accepted = await ctx.ui.confirm("Start plan mode?", `${params.request}\n\nWhy: ${params.reason}`);
+			if (!accepted) {
+				return {
+					content: [{ type: "text", text: "The user declined plan mode. Continue the request without it." }],
+					details: { accepted: false },
+				};
+			}
+			startPlanMode(params.request, ctx, "followUp");
+			return {
+				content: [
+					{
+						type: "text",
+						text: "The user accepted plan mode. Stop here: the plan-mode step that follows leads the next turn.",
+					},
+				],
+				details: { accepted: true },
+			};
+		},
 	});
 
 	pi.registerTool({
@@ -387,7 +438,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		name: "plan_tickets",
 		label: "Plan tickets",
 		description:
-			"Draft, approve, and publish dependency-aware tickets. submit_drafts (in ticketing or reviewing) takes epic and drafts and moves to reviewing. approve asks the user to confirm the drafts. publish (in reviewing, approved, with no pending re-review) creates a Beads epic with child tickets and blocker edges, or Markdown files in tickets/ if Beads is unusable, then moves to scheduling, where plan_schedule proposes the order.",
+			"Draft, approve, and publish dependency-aware tickets. submit_drafts (in ticketing or reviewing) takes epic and drafts and moves to reviewing. approve asks the user to confirm the drafts. publish (in reviewing, approved, with no pending re-review) creates a Beads epic with child tickets and blocker edges, or Markdown files in tickets/ when Beads is not used, then moves to scheduling, where plan_schedule proposes the order.",
 		promptSnippet: "Submit ticket drafts for review, get the user's approval, and publish them",
 		parameters: ticketParams,
 		defaultActive: false,
@@ -427,15 +478,35 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				}
 				case "publish": {
 					const drafts = assertPublishable(session);
-					const result = await publishTickets({
-						exec: (command, args) => pi.exec(command, args, { cwd: ctx.cwd }),
-						epic: drafts.epic,
-						drafts: drafts.tickets,
-						markdownDir: join(ctx.cwd, "tickets"),
+					const markdownDir = join(ctx.cwd, "tickets");
+					const choice = await chooseTracker({
+						run: runAt,
+						cwd: ctx.cwd,
+						canAsk: ctx.mode === "tui" && ctx.hasUI,
+						confirm: (title, message) => ctx.ui.confirm(title, message),
 					});
+					let result: PublishResult;
+					if (choice.kind === "beads") {
+						const root = choice.root;
+						result = await publishTickets({
+							exec: (command, args) => runAt(command, args, root),
+							epic: drafts.epic,
+							drafts: drafts.tickets,
+							markdownDir,
+						});
+						// publishTickets falls back to Markdown when bd cannot create the epic; only Beads results carry the root.
+						if (result.tracker === "beads") result = { ...result, root };
+					} else {
+						result = publishMarkdown({
+							epic: drafts.epic,
+							drafts: drafts.tickets,
+							markdownDir,
+							fallbackReason: choice.reason,
+						});
+					}
 					if (result.tracker === "markdown") {
 						ctx.ui.notify(
-							`Beads is unusable (${result.fallbackReason}). Wrote the tickets as Markdown to ${result.markdownDir}.`,
+							`Tickets went to Markdown: ${result.fallbackReason}. Wrote them to ${result.markdownDir}.`,
 							"warning",
 						);
 					}
@@ -479,7 +550,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				case "propose": {
 					const published = assertPublished(session);
 					const next = proposeSchedule(session);
-					const { issues } = await loadTracker(ctx, published);
+					const { issues } = await loadTracker(published);
 					const schedule = deriveSchedule(issues);
 					setWorkflow(ctx, next);
 					return {
@@ -500,7 +571,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				}
 				case "agree": {
 					assertScheduleProposed(session);
-					const { issues } = await loadTracker(ctx, assertPublished(session));
+					const { issues } = await loadTracker(assertPublished(session));
 					const agreed = await ctx.ui.confirm(
 						"Agree the execution schedule?",
 						renderSchedule(deriveSchedule(issues), issues),
@@ -540,9 +611,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		parameters: orchestrateParams,
 		defaultActive: false,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const outcome = await runOrchestrate(orchestration, params, (command, args) =>
-				pi.exec(command, args, { cwd: ctx.cwd }),
-			);
+			// Beads closes tickets from the git root recorded at publish, which the tracker carries.
+			const cwd = orchestration?.tracker.kind === "beads" ? orchestration.tracker.root : ctx.cwd;
+			const outcome = await runOrchestrate(orchestration, params, (command, args) => runAt(command, args, cwd));
 			orchestration = outcome.orchestration;
 			pi.appendEntry(ORCHESTRATION_ENTRY, orchestrationEntry(orchestration));
 			return outcome.result;
@@ -594,7 +665,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	// Inject the plan mode context before a user prompt. Runs started by custom messages, such as
 	// background task notifications, skip it: the context from the last prompt is still in the
 	// conversation, and adding it again on every notification would only repeat it.
-	pi.on("before_agent_start", async (event) => {
+	pi.on("before_agent_start", async (event, ctx) => {
+		// The note is fixed text, so the system prompt stays byte-identical across interactive turns.
+		if (ctx.mode === "tui") event.systemPromptOptions.sections.plan_mode = PLAN_MODE_NOTE;
 		if (event.messageType !== "user") return;
 		if (session) {
 			return { message: { customType: "plan-mode-context", content: planContext(session), display: false } };
@@ -619,7 +692,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	});
 
 	// Restore orchestration, plan mode, its phase, and its confirmations on session start/resume
-	pi.on("session_start", async (_event, ctx) => {
+	pi.on("session_start", async (event, ctx) => {
 		const orchestrationData = lastEntryData<OrchestrationEntry>(ctx, ORCHESTRATION_ENTRY);
 		orchestration = orchestrationData ? restoreOrchestration(orchestrationData) : undefined;
 		if (orchestration) activateOrchestrationTool();
@@ -645,17 +718,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		// A session without an enabled entry must not inherit the previous session's tool restriction
 		if (session) pi.setActiveTools(session.toolsBeforePlanMode);
 		session = undefined;
-		if (pi.getFlag("plan") === true) {
+		syncProposalTool(ctx);
+		// --plan starts plan mode only at startup, so a fresh session (/plan-execute), resume, or fork stays in normal mode.
+		if (pi.getFlag("plan") === true && event.reason === "startup") {
 			enterPlanMode(ctx);
 		} else {
 			updateStatus(ctx);
 		}
 	});
 }
-
-export const planModeBuiltin = {
-	name: "plan-mode",
-	factory: planModeExtension,
-	replaceable: true,
-	builtin: true,
-} as const;

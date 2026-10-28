@@ -162,8 +162,6 @@ Resource arrays support glob exclusions with `!pattern`, exact inclusion with `+
 
 The built-in extensions are named `builtin:mcp`, `builtin:llama.cpp`, `builtin:codemode`, `builtin:tool-search`, and `builtin:plan-mode` in `extensions`. They load by default; `-builtin:mcp` disables one. A `+builtin:<name>` or `-builtin:<name>` entry in project settings overrides the user setting. `pi config` lists them under Built-in. `--no-extensions` disables them too, and `-e builtin:<name>` loads one explicitly.
 
-Plan Mode adds `/plan`, `/plan-execute`, and the `--plan` flag. See [Plan Mode](plan-mode.md) for its workflow and ticket handoff.
-
 ## Updates, telemetry, and warnings
 
 | Setting | Type | Default | Description |
