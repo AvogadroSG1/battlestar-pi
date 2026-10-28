@@ -19,6 +19,7 @@ import {
 	type OrchestratorSnapshot,
 	type ReviewDecision,
 } from "./orchestration.ts";
+import { readPlanModeSkills } from "./skills.ts";
 import type { CommandRunner } from "./tickets.ts";
 
 export const ORCHESTRATION_ENTRY = "plan-orchestration";
@@ -153,7 +154,7 @@ export async function runOrchestrate(
 				result: report(
 					orchestration,
 					o.status(id),
-					`Red contract recorded for ${id}: ${params.testPath} must fail now and pass when the ticket is done.\nAcceptance: ${params.acceptance}\nWrite the failing test first (/skill:tdd), confirm it fails, then dispatch ${id}.`,
+					`Red contract recorded for ${id}: ${params.testPath} must fail now and pass when the ticket is done.\nAcceptance: ${params.acceptance}\nUse the bundled TDD guidance to write the failing test first, confirm it fails, then dispatch ${id}.`,
 				),
 			};
 		}
@@ -167,7 +168,7 @@ export async function runOrchestrate(
 				result: report(
 					orchestration,
 					o.status(id),
-					`Dispatched ${id} to an implementor.\nGive it the ticket in the tracker, its red contract (${contract?.testPath}: ${contract?.acceptance}), and these rules: make the test pass without editing it (/skill:tdd); self-check with /skill:code-review; call orchestrate submit_work when done; ask for help only when blocked.\n${readyText(orchestration)}`,
+					`Dispatched ${id} to an implementor.\nGive it the ticket in the tracker, its red contract (${contract?.testPath}: ${contract?.acceptance}), and these rules: make the test pass without editing it; self-check with the bundled code-review guidance; call orchestrate submit_work when done; ask for help only when blocked.\n${readyText(orchestration)}`,
 				),
 			};
 		}
@@ -177,7 +178,7 @@ export async function runOrchestrate(
 			const { granted, remaining } = o.requestHelp(id);
 			const text = granted
 				? `Orchestrator help granted for ${id} (${remaining} request${remaining === 1 ? "" : "s"} left). Answer the implementor's question, then let it continue.`
-				: `Help budget used up for ${id} (${HELP_LIMIT} of ${HELP_LIMIT} requests). Do not ask again: the implementor finishes the attempt, submits the work, and review decides. Diagnose the blocker with /skill:diagnosing-bugs.`;
+				: `Help budget used up for ${id} (${HELP_LIMIT} of ${HELP_LIMIT} requests). Do not ask again: the implementor finishes the attempt, submits the work, and review decides. Diagnose the blocker with the bundled diagnosing-bugs guidance.`;
 			return { orchestration, result: report(orchestration, o.status(id), text, { granted, remaining }) };
 		}
 
@@ -189,7 +190,7 @@ export async function runOrchestrate(
 				result: report(
 					orchestration,
 					o.status(id),
-					`Work submitted for ${id}. Verify it with /skill:code-review against the red contract and its acceptance scenario, then call orchestrate review with the findings (an empty list when it is clean).`,
+					`Work submitted for ${id}. Verify it with the bundled code-review guidance against the red contract and its acceptance scenario, then call orchestrate review with the findings (an empty list when it is clean).`,
 				),
 			};
 		}
@@ -350,16 +351,22 @@ function framingText(orchestration: Orchestration, id: string, decision: Decisio
 
 /** Rules for the orchestrating agent. Injected before each prompt once orchestration is active. */
 export function orchestrationContext(): string {
-	return `[ORCHESTRATION]
+	const guidance = `[ORCHESTRATION]
 You orchestrate the tickets of the approved plan. The user already approved the schedule: do not ask for approval again.
-- Before dispatch, write the failing BDD test for each ticket (/skill:tdd) and record it with orchestrate red_contract.
+- Before dispatch, write the failing BDD test for each ticket using the bundled TDD guidance and record it with orchestrate red_contract.
 - Dispatch only tickets whose blockers are closed. Dispatch independent ready tickets in parallel.
 - An implementor may ask for orchestrator help at most 2 times per ticket.
-- Verify completed work with /skill:code-review, then call orchestrate review with the findings. Medium or high findings go back for a fix: at most 2 ordinary fix cycles.
-- Stuck or failing work: diagnose with /skill:diagnosing-bugs before escalating.
+- Verify completed work with the bundled code-review guidance, then call orchestrate review with the findings. Medium or high findings go back for a fix: at most 2 ordinary fix cycles.
+- Stuck or failing work: use the bundled diagnosing-bugs guidance before escalating.
 - After 2 fix cycles, joint framing: the implementor and you fill in and review ${JOINT_FRAMING_FILE}. An agreed pathway grants one more work/review cycle.
 - If no pathway is agreed, a fresh medium-reasoning arbitrator decides only from the joint brief. For destructive-data or security concerns, the arbitrator asks the user, and work stays paused until the answer is recorded.
 - Final reports for escalations go in docs/escalation/.
 - Close a verified ticket in the tracker (orchestrate close) before dispatching the tickets it unblocks.
 - Paused work stays paused until the decision is returned.`;
+	return `${guidance}\n\nBundled skill guidance (private to Plan Mode):\n\n${readPlanModeSkills([
+		"tdd",
+		"code-review",
+		"diagnosing-bugs",
+		"codebase-design",
+	])}`;
 }

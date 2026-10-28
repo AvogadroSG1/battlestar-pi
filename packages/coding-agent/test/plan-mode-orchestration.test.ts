@@ -2,14 +2,14 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { closeInTracker, type Finding, Orchestrator } from "../examples/extensions/plan-mode/orchestration.ts";
-import { publishTickets } from "../examples/extensions/plan-mode/tickets.ts";
+import { closeInTracker, type Finding, Orchestrator } from "../src/extensions/plan-mode/orchestration.ts";
+import { publishTickets } from "../src/extensions/plan-mode/tickets.ts";
 import { fakeBd } from "./plan-mode-fake-bd.ts";
 import { setupPlanMode } from "./plan-mode-harness.ts";
 
 // BDD contract for battlestar-pi-tkl.3: delegate implementation, verify tickets, resolve stuck work.
 //
-// Module under test: examples/extensions/plan-mode/orchestration.ts
+// Module under test: src/extensions/plan-mode/orchestration.ts
 //   new Orchestrator(tickets: { id: string; blockedBy: string[] }[])
 //     ids in blockedBy that are not in `tickets` count as already closed
 //     status(id): "pending" | "contracted" | "implementing" | "verifying" | "fixing" | "framing"

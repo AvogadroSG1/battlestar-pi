@@ -455,6 +455,16 @@ export function getExamplesPath(): string {
 	return resolve(join(getPackageDir(), "examples"));
 }
 
+/** Get the private skill directory bundled with the Plan Mode extension. */
+export function getPlanModeSkillsDir(): string {
+	if (isBunBinary) {
+		return join(getPackageDir(), "extensions", "plan-mode", "skills");
+	}
+	const packageDir = getPackageDir();
+	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
+	return join(packageDir, srcOrDist, "extensions", "plan-mode", "skills");
+}
+
 /** Get path to CHANGELOG.md */
 export function getChangelogPath(): string {
 	return resolve(join(getPackageDir(), "CHANGELOG.md"));

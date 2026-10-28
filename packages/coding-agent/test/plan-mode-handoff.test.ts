@@ -9,14 +9,14 @@ import {
 	readMarkdownIssues,
 	renderSchedule,
 	type TrackerIssue,
-} from "../examples/extensions/plan-mode/schedule.ts";
-import { type DraftTicket, publishTickets } from "../examples/extensions/plan-mode/tickets.ts";
+} from "../src/extensions/plan-mode/schedule.ts";
+import { type DraftTicket, publishTickets } from "../src/extensions/plan-mode/tickets.ts";
 import { fakeBd } from "./plan-mode-fake-bd.ts";
 import { type PlanHarness, setupPlanMode } from "./plan-mode-harness.ts";
 
 // BDD contract for battlestar-pi-tkl.4: tracker-derived schedule, user agreement, /handoff + /new.
 //
-// Module under test: examples/extensions/plan-mode/schedule.ts
+// Module under test: src/extensions/plan-mode/schedule.ts
 //   deriveSchedule(issues: TrackerIssue[]): Schedule
 //     Schedule = { waves: { index: number; ticketIds: string[]; parallel: boolean }[]; ready: string[] }
 //     closed issues are excluded (and satisfy blockers); wave 0 === ready now; unknown blocker or cycle throws

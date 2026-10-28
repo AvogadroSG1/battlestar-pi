@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSafeCommand } from "../examples/extensions/plan-mode/utils.ts";
+import { isSafeCommand } from "../src/extensions/plan-mode/utils.ts";
 
 describe("isSafeCommand", () => {
 	describe("safe commands", () => {

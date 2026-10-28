@@ -12,6 +12,15 @@ function pick(label: string) {
 }
 
 describe("plan mode lifecycle", () => {
+	it("keeps workflow tools inactive until their mode needs them", async () => {
+		const h = setupPlanMode();
+
+		expect([...h.tools.values()].every((tool) => tool.defaultActive === false)).toBe(true);
+		await h.runCommand("plan");
+		expect(h.activeTools()).toContain("plan_tickets");
+		expect(h.activeTools()).not.toContain("orchestrate");
+	});
+
 	describe("given a user invokes /plan", () => {
 		it("enters plan mode: write tools off, status shown, custom tools preserved", async () => {
 			const h = setupPlanMode({ activeTools: ["read", "bash", "edit", "write", "custom_tool"] });
@@ -47,6 +56,15 @@ describe("plan mode lifecycle", () => {
 			expect((blocked as { block?: boolean }).block).toBe(true);
 			expect(allowed).toBeUndefined();
 		});
+	});
+
+	it("activates only the orchestration tool for a plan handoff", async () => {
+		const h = setupPlanMode();
+
+		await h.emit("before_agent_start", { messageType: "user", prompt: "PLAN HANDOFF\nStart the tickets." });
+
+		expect(h.activeTools()).toContain("orchestrate");
+		expect(h.activeTools()).not.toContain("plan_tickets");
 	});
 
 	describe("given plan mode is active", () => {

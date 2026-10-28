@@ -8,13 +8,13 @@ import {
 	publishTickets,
 	renderTicketBody,
 	validateDrafts,
-} from "../examples/extensions/plan-mode/tickets.ts";
+} from "../src/extensions/plan-mode/tickets.ts";
 import { fakeBd } from "./plan-mode-fake-bd.ts";
 import { type PlanHarness, setupPlanMode } from "./plan-mode-harness.ts";
 
 // BDD contract for battlestar-pi-tkl.5: draft, review, and publish dependency-aware tickets.
 //
-// Module under test: examples/extensions/plan-mode/tickets.ts
+// Module under test: src/extensions/plan-mode/tickets.ts
 //   validateDrafts(drafts): string[]                 problems; [] means valid
 //   orderForPublication(drafts): DraftTicket[]       blockers first, stable otherwise
 //   renderTicketBody(ticket, blockerTitles): string  markdown body

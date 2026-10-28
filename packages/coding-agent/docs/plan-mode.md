@@ -1,6 +1,6 @@
 # Plan Mode Extension
 
-Collaborative planning mode. While plan mode is active, the agent cannot edit or write files and bash is limited to read-only commands. The agent moves the planning workflow through named phases with the `plan_phase`, `plan_readiness`, `plan_confirm`, `plan_tickets`, and `plan_schedule` tools.
+Plan Mode is a built-in collaborative planning extension, enabled by default. It adds `/plan`, `/plan-execute`, the `--plan` flag, and the `plan_phase`, `plan_readiness`, `plan_confirm`, `plan_tickets`, and `plan_schedule` tools. Disable it with `-builtin:plan-mode` in the `extensions` setting. While Plan Mode is active, the agent cannot edit or write files and bash is limited to read-only commands.
 
 ## Commands
 
@@ -16,9 +16,9 @@ Collaborative planning mode. While plan mode is active, the agent cannot edit or
 Phase steps:
 
 - `readiness`: the agent judges whether the request is ready for ticketing and calls `plan_readiness` with a `grill` or `ticket` recommendation and a one-line rationale. The user agrees or picks the other path; dismissing the menu follows the recommendation. `grill` moves to `grilling`; `ticket` moves to `confirming`.
-- `grilling`: requirements are explored with the `grill-with-docs` skill, which uses the grilling and domain-modeling skills. The agent does not write a numbered plan.
+- `grilling`: requirements are explored with the bundled `grill-with-docs`, `grilling`, and `domain-modeling` guidance. These private resources are included only while Plan Mode needs them; they are not registered as user skills. The agent does not write a numbered plan.
 - `confirming`: the agent calls `plan_confirm` with kind `outcome` (desired outcome and constraints) and kind `system_model` (system and domain model). The user confirms or declines each summary. A declined summary returns the workflow to `grilling`.
-- `ticketing`: `plan_phase` refuses this phase until both `outcome` and `system_model` are confirmed. The agent drafts tickets with the `to-tickets` skill and submits them with `plan_tickets`, action `submit_drafts` (see Tickets below).
+- `ticketing`: `plan_phase` refuses this phase until both `outcome` and `system_model` are confirmed. The agent drafts tickets with the bundled `to-tickets` guidance and submits them with `plan_tickets`, action `submit_drafts` (see Tickets below).
 - `reviewing`: entered by a valid `submit_drafts`. The agent asks the user whether the granularity is right and whether each blocker is a real dependency, revises with `submit_drafts` until the user agrees, then calls `plan_tickets` with action `approve`.
 - `scheduling`: entered by a successful `publish`. The agent calls `plan_schedule` with action `propose`, presents the order and parallel waves, then calls `plan_schedule` with action `agree` once the user confirms. Agreement moves to `ready`.
 
@@ -37,7 +37,7 @@ The confirmations, `reReviewRequired`, the drafts, their approval, and the last 
 ## Lifecycle
 
 1. `/plan <request>` enables plan mode, disables `edit` and `write`, keeps other active tools, and sends the agent its first planning step with the request.
-2. While active, every user prompt gets the plan-mode context, and bash commands outside the allowlist are blocked.
+2. While active, every user prompt gets the plan-mode context and private skill guidance for the current phase; bash commands outside the allowlist are blocked.
 3. When the phase is `ready`, the agent's turn ends with a menu:
    - Execute and clear context: sends `/plan-execute`.
    - Continue planning: nothing happens.

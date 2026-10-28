@@ -67,13 +67,14 @@ describe("readiness assessment", () => {
 });
 
 describe("grilling uses the approved skills, not a separate plan mode", () => {
-	it("directs the agent to /skill:grill-with-docs while grilling", async () => {
+	it("injects private grilling instructions only while grilling", async () => {
 		const h = await inPlanMode({ select: choose(GRILL) });
 		await h.runTool("plan_readiness", { recommendation: "grill", rationale: "unclear" });
 
 		const context = await h.injectedContext();
 
 		expect(context).toContain("grill-with-docs");
+		expect(context).toContain("Use the bundled grilling and domain-modeling guidance below in order.");
 		expect(context).not.toMatch(/^Plan:/m); // old numbered "Plan:" generation mode is gone
 	});
 

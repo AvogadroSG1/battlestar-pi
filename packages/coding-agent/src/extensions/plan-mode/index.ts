@@ -63,7 +63,19 @@ import {
 	submitDrafts,
 } from "./workflow.ts";
 
-const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls", "questionnaire"];
+const PLAN_MODE_TOOLS = [
+	"read",
+	"bash",
+	"grep",
+	"find",
+	"ls",
+	"questionnaire",
+	"plan_readiness",
+	"plan_confirm",
+	"plan_phase",
+	"plan_tickets",
+	"plan_schedule",
+];
 const NORMAL_MODE_TOOLS = ["read", "bash", "edit", "write"];
 const WRITE_TOOLS: Record<string, true> = { edit: true, write: true };
 
@@ -131,6 +143,11 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 	function updateStatus(ctx: ExtensionContext): void {
 		ctx.ui.setStatus("plan-mode", session ? ctx.ui.theme.fg("warning", `plan: ${session.phase}`) : undefined);
+	}
+
+	function activateOrchestrationTool(): void {
+		const activeTools = pi.getActiveTools();
+		if (!activeTools.includes("orchestrate")) pi.setActiveTools([...activeTools, "orchestrate"]);
 	}
 
 	function persist(): void {
@@ -286,6 +303,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			recommendation: StringEnum(READINESS_CHOICES),
 			rationale: Type.String({ description: "One line explaining the recommendation" }),
 		}),
+		defaultActive: false,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			if (!session) throw new Error(NOT_ACTIVE);
 			assertReadinessOpen(session);
@@ -317,6 +335,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			kind: StringEnum(CONFIRMATION_KINDS),
 			summary: Type.String({ description: "Short summary the user confirms or declines" }),
 		}),
+		defaultActive: false,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			if (!session) throw new Error(NOT_ACTIVE);
 
@@ -349,6 +368,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				}),
 			),
 		}),
+		defaultActive: false,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			if (!session) throw new Error("Plan mode is not active. Start it with /plan first.");
 			if (!isPlanPhase(params.phase)) {
@@ -370,6 +390,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			"Draft, approve, and publish dependency-aware tickets. submit_drafts (in ticketing or reviewing) takes epic and drafts and moves to reviewing. approve asks the user to confirm the drafts. publish (in reviewing, approved, with no pending re-review) creates a Beads epic with child tickets and blocker edges, or Markdown files in tickets/ if Beads is unusable, then moves to scheduling, where plan_schedule proposes the order.",
 		promptSnippet: "Submit ticket drafts for review, get the user's approval, and publish them",
 		parameters: ticketParams,
+		defaultActive: false,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			if (!session) throw new Error(NOT_ACTIVE);
 			switch (params.action) {
@@ -451,6 +472,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			"Propose or agree the execution schedule for the published tickets. propose reads each ticket's status and blocker edges from the tracker and shows the ordering in waves, with the tickets that can run in parallel. agree asks the user to confirm the proposed schedule; a declined agreement keeps the plan in scheduling. Only an agreed schedule reaches ready.",
 		promptSnippet: "Propose the execution order from the tracker, and ask the user to agree it",
 		parameters: scheduleParams,
+		defaultActive: false,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			if (!session) throw new Error(NOT_ACTIVE);
 			switch (params.action) {
@@ -516,6 +538,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			"Run the handed-off plan tickets. init takes the open tickets of the approved schedule (id and blockedBy) and the tracker. Then red_contract (the failing BDD test for a ticket), dispatch, help, submit_work, review (findings), framing (joint framing outcome), arbitration, close (verified work, closed in the tracker), and status. Every result lists the ready tickets and the next step.",
 		promptSnippet: "Dispatch, verify, and close the plan's tickets in dependency order",
 		parameters: orchestrateParams,
+		defaultActive: false,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const outcome = await runOrchestrate(orchestration, params, (command, args) =>
 				pi.exec(command, args, { cwd: ctx.cwd }),
@@ -579,6 +602,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		// Outside plan mode, the orchestration rules go to an active orchestration, and to the handoff
 		// prompt that starts the fresh session which runs it.
 		if (!orchestration && !event.prompt.startsWith(HANDOFF_HEADER)) return;
+		activateOrchestrationTool();
 		return { message: { customType: ORCHESTRATION_CONTEXT, content: orchestrationContext(), display: false } };
 	});
 
@@ -598,6 +622,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	pi.on("session_start", async (_event, ctx) => {
 		const orchestrationData = lastEntryData<OrchestrationEntry>(ctx, ORCHESTRATION_ENTRY);
 		orchestration = orchestrationData ? restoreOrchestration(orchestrationData) : undefined;
+		if (orchestration) activateOrchestrationTool();
 
 		const data = lastEntryData<PlanModeEntry>(ctx, "plan-mode");
 		if (data?.enabled) {
@@ -627,3 +652,10 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		}
 	});
 }
+
+export const planModeBuiltin = {
+	name: "plan-mode",
+	factory: planModeExtension,
+	replaceable: true,
+	builtin: true,
+} as const;

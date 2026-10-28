@@ -1,8 +1,8 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { vi } from "vitest";
-import planModeExtension from "../examples/extensions/plan-mode/index.ts";
 import type { ExtensionAPI, ExtensionContext } from "../src/core/extensions/index.ts";
+import planModeExtension from "../src/extensions/plan-mode/index.ts";
 
 /**
  * Shared harness for the collaborative plan-mode extension tests.
@@ -43,6 +43,7 @@ type AnyHandler = (event: unknown, ctx: ExtensionContext) => unknown;
 type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void> | void;
 interface RegisteredTool {
 	name: string;
+	defaultActive?: boolean;
 	execute: (
 		id: string,
 		params: unknown,

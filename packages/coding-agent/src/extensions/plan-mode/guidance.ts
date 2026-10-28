@@ -4,6 +4,7 @@
  * only while grilling.
  */
 
+import { readPlanModeSkills } from "./skills.ts";
 import { CONFIRMATION_KINDS, CONFIRMATION_LABELS, type PlanSession } from "./workflow.ts";
 
 export function planContext(session: PlanSession): string {
@@ -15,12 +16,32 @@ Restrictions:
 - Other currently active tools remain available
 - Bash is restricted to an allowlist of read-only commands
 
+Plan Mode's bundled skills are private resources included below. Follow them directly; do not invoke /skill commands for them.
 Ask clarifying questions using the questionnaire tool.
-Use brave-search skill via bash for web research.
 Call plan_phase to move the workflow to the next phase.`;
 
 	const guidance = phaseGuidance(session);
-	return guidance ? `${base}\n\n${guidance}` : base;
+	const skills = skillsForPhase(session.phase);
+	const skillGuidance = skills.length > 0 ? `Bundled skill guidance:\n\n${readPlanModeSkills(skills)}` : "";
+	return [base, guidance, skillGuidance].filter(Boolean).join("\n\n");
+}
+
+function skillsForPhase(phase: PlanSession["phase"]): string[] {
+	switch (phase) {
+		case "readiness":
+		case "confirming":
+			return ["grilling", "domain-modeling"];
+		case "grilling":
+			return ["grill-with-docs", "grilling", "domain-modeling"];
+		case "ticketing":
+			return ["to-tickets", "domain-modeling"];
+		case "reviewing":
+			return ["to-tickets"];
+		case "scheduling":
+		case "ready":
+			return [];
+	}
+	return [];
 }
 
 function phaseGuidance(session: PlanSession): string {
@@ -44,19 +65,19 @@ function phaseGuidance(session: PlanSession): string {
 	}
 }
 
-const READINESS_GUIDANCE = `Readiness: decide whether this request can go straight to ticketing or needs requirements discovery first. Use the grilling skill (/skill:grilling) to judge readiness, and the domain-modeling skill (/skill:domain-modeling) for domain terms.
+const READINESS_GUIDANCE = `Readiness: decide whether this request can go straight to ticketing or needs requirements discovery first. Use the bundled grilling guidance to judge readiness, and the domain-modeling guidance for domain terms.
 Explain your recommendation to the user, then call plan_readiness with recommendation "grill" (requirements are unclear or undecided) or "ticket" (the request is already specific), and a one-line rationale. The tool asks the user to agree or choose the other path.`;
 
 function grillingGuidance(returnReason: string | undefined): string {
 	const returned = returnReason
 		? `The workflow returned to grilling because ${returnReason}. Resolve that first.\n`
 		: "";
-	return `Grilling: work out the requirements with /skill:grill-with-docs, which uses the grilling and domain-modeling skills. Do not write a numbered plan.
+	return `Grilling: work out the requirements with the bundled grill-with-docs guidance. Do not write a numbered plan.
 ${returned}When the desired outcome and constraints are settled, and the system and domain model is clear, call plan_confirm with kind "outcome" and kind "system_model", each with a short summary. Then call plan_phase with phase "ticketing".`;
 }
 
 function confirmingGuidance(session: PlanSession): string {
-	return `Confirming: check the shared understanding with the user before ticketing. Use the grilling and domain-modeling skills (/skill:grilling, /skill:domain-modeling) to restate it.
+	return `Confirming: check the shared understanding with the user before ticketing. Use the bundled grilling and domain-modeling guidance to restate it.
 Call plan_confirm with kind "outcome" (the desired outcome and constraints) and kind "system_model" (the relevant system and domain model), each with a short summary. A declined summary sends the workflow back to grilling.
 ${confirmationStatus(session)}
 When both are confirmed, call plan_phase with phase "ticketing".`;
@@ -66,7 +87,7 @@ function ticketingGuidance(session: PlanSession): string {
 	const review = session.reReviewRequired
 		? "Tickets drafted before the last return to grilling must be submitted again before publication.\n"
 		: "";
-	return `Ticketing: draft the tickets with /skill:to-tickets as vertical tracer-bullet slices, each with explicit blockers.
+	return `Ticketing: draft the tickets with the bundled to-tickets guidance as vertical tracer-bullet slices, each with explicit blockers. Publish them only through plan_tickets.
 Submit the drafts with plan_tickets, action "submit_drafts", an epic {title, outcome}, and drafts. Each draft has:
 - key: short unique key that blockedBy uses
 - title and whatToBuild: the end-to-end behavior the slice makes work, from the user's perspective
