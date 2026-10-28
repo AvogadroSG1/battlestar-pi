@@ -23,6 +23,14 @@ The agent directory is shown as `<agent-dir>` below. Set its location with the `
 | `<agent-dir>/prompts/` | User [prompt templates](prompt-templates.md) exposed as slash commands. |
 | `<agent-dir>/themes/` | User [theme](themes.md) files. |
 
+On first run, `battlestar` runs `herdr integration install pi` with `PI_CODING_AGENT_DIR` set to the agent directory. This installs herdr's pi extension as `<agent-dir>/extensions/herdr-agent-state.ts`, so herdr shows working, idle, and blocked states for panes running the harness. Inside herdr the process title is `pi` so herdr recognizes the harness as a pi agent. If `herdr` is not on `PATH`, nothing is installed and no warning appears. If the install fails, a warning prints the manual command to run:
+
+```sh
+PI_CODING_AGENT_DIR=<agent-dir> herdr integration install pi
+```
+
+git-ai is not supported yet. Its pi hook path is fixed to `~/.pi/agent`, so the harness does not register or copy it and records no AI authorship until git-ai supports a config-dir override.
+
 ## Project `.pi` directory
 
 | Path | Responsibility |

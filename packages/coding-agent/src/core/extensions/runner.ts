@@ -814,22 +814,32 @@ export class ExtensionRunner {
 	private resolveRegisteredCommands(): ResolvedCommand[] {
 		const commands: RegisteredCommand[] = [];
 		const counts = new Map<string, number>();
+		const builtinNames = new Set<string>();
 
 		for (const ext of this.extensions) {
 			for (const command of ext.commands.values()) {
 				commands.push(command);
 				counts.set(command.name, (counts.get(command.name) ?? 0) + 1);
+				if (command.sourceInfo.source === "builtin") builtinNames.add(command.name);
 			}
 		}
 
-		const seen = new Map<string, number>();
+		const suffixed = new Map<string, number>();
 		const takenInvocationNames = new Set<string>();
 
 		return commands.map((command) => {
-			const occurrence = (seen.get(command.name) ?? 0) + 1;
-			seen.set(command.name, occurrence);
-
-			let invocationName = (counts.get(command.name) ?? 0) > 1 ? `${command.name}:${occurrence}` : command.name;
+			// A built-in owner keeps the bare name; every other registration of that name gets `name:N`, numbered
+			// among those registrations only, so a built-in in the middle leaves no gap.
+			const keepsBareName = builtinNames.has(command.name)
+				? command.sourceInfo.source === "builtin"
+				: (counts.get(command.name) ?? 0) <= 1;
+			let occurrence = 0;
+			let invocationName = command.name;
+			if (!keepsBareName) {
+				occurrence = (suffixed.get(command.name) ?? 0) + 1;
+				suffixed.set(command.name, occurrence);
+				invocationName = `${command.name}:${occurrence}`;
+			}
 
 			if (takenInvocationNames.has(invocationName)) {
 				let suffix = occurrence;

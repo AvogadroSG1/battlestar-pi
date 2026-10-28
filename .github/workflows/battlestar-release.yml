@@ -1,0 +1,177 @@
+name: Battlestar Release
+
+# Harness release tags look like v<base>-bs.<N> (for example v1.4.0-bs.1). The tag
+# must match packages/coding-agent/package.json (version and piConfig.harnessRevision)
+# or the workflow stops in `verify` before anything is built or published.
+
+on:
+  push:
+    tags:
+      - 'v*-bs.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Harness release tag to build (e.g., v1.4.0-bs.1)'
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: battlestar-release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Check tag against package version
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(node scripts/battlestar-release-version.mjs "${TAG}")"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+  build:
+    needs: verify
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: darwin-arm64
+            runner: macos-15
+          - platform: darwin-x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      VERSION: ${{ needs.verify.outputs.version }}
+      OUT_DIR: ${{ runner.temp }}/battlestar-release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Hydrate release model data
+        run: npm run hydrate:model-data
+
+      - name: Build battlestar binary
+        run: |
+          set -euo pipefail
+          # --skip-install: dependencies were installed by the step above.
+          scripts/build-binaries.sh \
+            --skip-install \
+            --offline-model-data \
+            --platform "${{ matrix.platform }}" \
+            --out "${OUT_DIR}"
+
+      - name: Smoke-test binary
+        run: |
+          set -euo pipefail
+          extract_dir="$(mktemp -d)"
+          tar -xzf "${OUT_DIR}/battlestar-${{ matrix.platform }}.tar.gz" -C "${extract_dir}"
+          actual="$("${extract_dir}/battlestar/battlestar" --version)"
+          if [[ "${actual}" != "${VERSION}" ]]; then
+            echo "::error::battlestar --version printed '${actual}', expected '${VERSION}'."
+            exit 1
+          fi
+
+      - name: Upload archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: battlestar-${{ matrix.platform }}
+          path: ${{ runner.temp }}/battlestar-release/battlestar-${{ matrix.platform }}.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    needs:
+      - verify
+      - build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Download archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: battlestar-darwin-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Write checksums
+        run: |
+          set -euo pipefail
+          cd release-assets
+          shasum -a 256 battlestar-darwin-arm64.tar.gz battlestar-darwin-x64.tar.gz > checksums.txt
+          shasum -a 256 -c checksums.txt
+
+      - name: Render Homebrew formula
+        run: |
+          set -euo pipefail
+          node scripts/battlestar-homebrew-formula.mjs "${VERSION}" release-assets/checksums.txt > release-assets/battlestar.rb
+
+      - name: Create GitHub release
+        run: |
+          set -euo pipefail
+          cd release-assets
+          gh release create "${TAG}" \
+            --verify-tag \
+            --title "battlestar ${VERSION}" \
+            --generate-notes \
+            battlestar-darwin-arm64.tar.gz \
+            battlestar-darwin-x64.tar.gz \
+            checksums.txt \
+            battlestar.rb

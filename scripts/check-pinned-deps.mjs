@@ -1,16 +1,18 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const dependencySections = ["dependencies", "devDependencies", "optionalDependencies"];
 const exactVersionPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
-const ignoredDirectories = new Set([".git", "dist", "node_modules"]);
+const ignoredDirectories = new Set([".git", "apm_modules", "dist", "node_modules"]);
 const packageJsonFiles = [];
 
 function collectPackageJsonFiles(directory) {
 	for (const entry of readdirSync(directory, { withFileTypes: true })) {
 		if (entry.isDirectory()) {
-			if (!ignoredDirectories.has(entry.name)) {
-				collectPackageJsonFiles(join(directory, entry.name));
+			const child = join(directory, entry.name);
+			// Nested git checkouts (e.g. a sibling project cloned into the tree) are not part of this workspace.
+			if (!ignoredDirectories.has(entry.name) && !existsSync(join(child, ".git"))) {
+				collectPackageJsonFiles(child);
 			}
 			continue;
 		}

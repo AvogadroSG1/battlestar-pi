@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { SyntaxKind } from "typescript/unstable/ast";
 import {
@@ -12,14 +12,16 @@ import {
 } from "typescript/unstable/ast/is";
 import { API } from "typescript/unstable/sync";
 
-const ignoredDirectories = new Set([".git", "coverage", "dist", "node_modules"]);
+const ignoredDirectories = new Set([".git", "apm_modules", "coverage", "dist", "node_modules"]);
 const files = [];
 
 function collectTypescriptFiles(directory) {
 	for (const entry of readdirSync(directory, { withFileTypes: true })) {
 		if (entry.isDirectory()) {
-			if (!ignoredDirectories.has(entry.name)) {
-				collectTypescriptFiles(join(directory, entry.name));
+			const child = join(directory, entry.name);
+			// Nested git checkouts (e.g. a sibling project cloned into the tree) are not part of this workspace.
+			if (!ignoredDirectories.has(entry.name) && !existsSync(join(child, ".git"))) {
+				collectTypescriptFiles(child);
 			}
 			continue;
 		}
