@@ -1,6 +1,6 @@
 # Explore Mode: Implementation Work Items
 
-This handoff breaks down the MVP recorded in [ADR 0001](./adr/0001-exploration-uses-agent-loop.md) and uses the terms in [GLOSSARY.md](../GLOSSARY.md). It is intended for parallel implementation handoff, with dependencies listed explicitly.
+This handoff breaks down the MVP recorded in [ADR 0003](./adr/0003-exploration-uses-agent-loop.md) and uses the terms in [GLOSSARY.md](../GLOSSARY.md). It is intended for parallel implementation handoff, with dependencies listed explicitly.
 
 ## 01: Start read-only repository exploration
 

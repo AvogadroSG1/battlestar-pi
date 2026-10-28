@@ -465,6 +465,11 @@ export function getExploreArchitectureDiscoverySkillDir(): string {
 	return join(packageDir, srcOrDist, "extensions", "explore", "architecture-discovery");
 }
 
+/** Get path to the pinned core skills directory that plan mode reads (ADR 0002) */
+export function getCoreSkillsDir(): string {
+	return resolve(join(getPackageDir(), "core-skills"));
+}
+
 /** Get path to CHANGELOG.md */
 export function getChangelogPath(): string {
 	return resolve(join(getPackageDir(), "CHANGELOG.md"));
@@ -569,6 +574,7 @@ interface PackageJson {
 	piConfig?: {
 		name?: string;
 		configDir?: string;
+		harnessRevision?: number;
 	};
 }
 
@@ -590,10 +596,21 @@ export const APP_NAME: string = piConfigName || "pi";
 export const APP_TITLE: string = piConfigName ? APP_NAME : "π";
 export const CONFIG_DIR_NAME: string = pkg.piConfig?.configDir || ".pi";
 export const VERSION: string = pkg.version || "0.0.0";
+/** Printed by `--version`: the upstream base plus `-bs.N`. Without a revision (stock pi) it is VERSION. */
+export const HARNESS_VERSION: string =
+	pkg.piConfig?.harnessRevision === undefined ? VERSION : `${VERSION}-bs.${pkg.piConfig.harnessRevision}`;
 
 // e.g., PI_CODING_AGENT_DIR or TAU_CODING_AGENT_DIR
 export const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`;
 export const ENV_SESSION_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_SESSION_DIR`;
+
+/**
+ * Process title for the running harness. Inside herdr it is `pi`: herdr detects agents by the foreground
+ * process's argv0 and drops `pane.report_agent` reports from panes where no `pi` agent is detected.
+ */
+export function getProcessTitle(): string {
+	return process.env.HERDR_ENV === "1" ? "pi" : APP_NAME;
+}
 
 export function expandTildePath(path: string): string {
 	return normalizePath(path);
@@ -608,10 +625,10 @@ export function getShareViewerUrl(gistId: string): string {
 }
 
 // =============================================================================
-// User Config Paths (~/.pi/agent/*)
+// User Config Paths (~/.battlestar/agent/*)
 // =============================================================================
 
-/** Get the agent config directory (e.g., ~/.pi/agent/) */
+/** Get the agent config directory (e.g., ~/.battlestar/agent/) */
 export function getAgentDir(): string {
 	const envDir = process.env[ENV_AGENT_DIR];
 	if (envDir) {

@@ -165,6 +165,27 @@ cd "pi-${VERSION}"
 
 The archive includes release model data and native prebuilds. `--offline-model-data` uses that model data without refreshing provider catalogs. The script installs dependencies and builds the executable with its runtime assets; pass `--skip-install` if dependencies are already provided.
 
+## Releasing battlestar
+
+Battlestar releases are tagged `v<base>-bs.<N>`. `<base>` is `version` and `<N>` is `piConfig.harnessRevision` in `packages/coding-agent/package.json`, so `--version` prints `<base>-bs.<N>`. The tag must match the package exactly; `scripts/battlestar-release-version.mjs` checks it and stops the release before anything is built.
+
+1. Raise `piConfig.harnessRevision` in `packages/coding-agent/package.json` (for example `1` to `2`). Change `version` only when the upstream base changes. Tags are never reused, so a published tag always means one build.
+2. Merge the change to `main`.
+3. Tag the merged commit and push the tag: `git tag v1.4.0-bs.2 && git push origin v1.4.0-bs.2`.
+
+The `Battlestar Release` workflow (`.github/workflows/battlestar-release.yml`) builds `battlestar-darwin-arm64.tar.gz` and `battlestar-darwin-x64.tar.gz` on macOS runners, checks that `battlestar --version` prints the tag's version, and creates the GitHub release with both archives, `checksums.txt`, and `battlestar.rb`. To rerun a tag after a failure, start the workflow manually with the `tag` input. It does not replace an existing release, so delete a partial release first.
+
+## Homebrew tap
+
+Each release includes `battlestar.rb`, a Homebrew formula that `scripts/battlestar-homebrew-formula.mjs` renders from the release's `checksums.txt`. The formula installs the archive for the machine's architecture into `libexec` and declares `beads` as a dependency, so `bd` is on `PATH` after install. Inside herdr, the `battlestar` launcher starts the binary with argv0 `pi`.
+
+The tap repository `AvogadroSG1/homebrew-battlestar` is maintained outside this repo. For each release:
+
+1. Download `battlestar.rb` from the GitHub release for the tag.
+2. Copy it to `Formula/battlestar.rb` in `AvogadroSG1/homebrew-battlestar` and commit it.
+
+Users then run `brew install AvogadroSG1/battlestar/battlestar` to install and `brew upgrade battlestar` to move to a newer release.
+
 ## Supply-chain hardening
 
 We treat npm dependency changes as reviewed code changes.

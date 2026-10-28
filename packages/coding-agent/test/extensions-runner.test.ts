@@ -533,6 +533,28 @@ describe("ExtensionRunner", () => {
 			expect(runner.getCommand("shared-cmd:1")?.description).toBe("First command");
 			expect(runner.getCommand("shared-cmd:2")?.description).toBe("Second command");
 		});
+
+		it("keeps the bare name for a built-in command and numbers the others without a gap", async () => {
+			const runtime = createExtensionRuntime();
+			const command =
+				(description: string): ExtensionFactory =>
+				(pi) => {
+					pi.registerCommand("shared", { description, handler: async () => {} });
+				};
+			const extensions = [
+				await loadExtensionFromFactory(command("first"), tempDir, createEventBus(), runtime, "<inline:first>"),
+				await loadExtensionFromFactory(command("builtin"), tempDir, createEventBus(), runtime, "builtin:shared"),
+				await loadExtensionFromFactory(command("third"), tempDir, createEventBus(), runtime, "<inline:third>"),
+			];
+			const runner = new ExtensionRunner(extensions, runtime, tempDir, sessionManager, modelRegistry);
+
+			expect(runner.getRegisteredCommands().map((cmd) => cmd.invocationName)).toEqual([
+				"shared:1",
+				"shared",
+				"shared:2",
+			]);
+			expect(runner.getCommand("shared")?.description).toBe("builtin");
+		});
 	});
 
 	describe("context creation", () => {

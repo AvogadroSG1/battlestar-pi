@@ -33,7 +33,8 @@ function createFixture(t, { importUndeclared = false } = {}) {
 			types: "./dist/index.d.ts",
 			exports: { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" } },
 			files: ["dist"],
-			bin: { pi: "dist/bundle/cli.js" },
+			piConfig: { name: "battlestar", configDir: ".battlestar", harnessRevision: 1 },
+			bin: { battlestar: "dist/bundle/cli.js" },
 		},
 		{
 			"dist/index.js": `${importUndeclared ? 'import "@earendil-works/undeclared";' : ""}
@@ -42,8 +43,8 @@ export class SessionManager { static inMemory() {} }
 export class ModelRuntime { static create() {} }
 `,
 			"dist/index.d.ts": "export {};\n",
-			"dist/cli.js": 'console.log("1.0.0");\n',
-			"dist/bundle/cli.js": 'console.log("1.0.0");\n',
+			"dist/cli.js": 'console.log("1.0.0-bs.1");\n',
+			"dist/bundle/cli.js": 'console.log("1.0.0-bs.1");\n',
 		},
 	);
 	const artifactSet = produceArtifactSet({ build: false, outDir: join(root, "artifacts"), repoRoot, source: null });
