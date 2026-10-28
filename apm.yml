@@ -1,0 +1,15 @@
+dependencies:
+  apm:
+    - /Users/avogadro/peter_code/ai_support/skills/ai-workflow/herdr
+    - /Users/avogadro/peter_code/ai_support/skills/ai-workflow/plannotator-compound
+    - /Users/avogadro/peter_code/ai_support/skills/ai-workflow/plannotator-setup-goal
+    - /Users/avogadro/peter_code/ai_support/skills/ai-workflow/plannotator-visual-explainer
+    - /Users/avogadro/peter_code/ai_support/plugins/marketplaces/mattpocock
+    - /Users/avogadro/peter_code/ai_support/plugins/marketplaces/claude-code-workflows/plugins/javascript-typescript
+  mcp: []
+targets:
+  - codex
+  - claude
+  - agent-skills
+name: battlestar-pi
+version: 0.1.0

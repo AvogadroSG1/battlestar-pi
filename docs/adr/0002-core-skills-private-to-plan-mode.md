@@ -1,0 +1,3 @@
+# Core skills are plan mode's private resources, not registered skills
+
+The harness ships its core skills (grill-with-docs, grilling, domain-modeling, to-tickets, handoff, tdd, code-review, diagnosing-bugs, codebase-design, beads) as a pinned copy that only plan mode reads, injecting each skill's text in the phase that needs it. Registering them as ordinary skills would list every name and description in every session's system prompt and make them runnable via `/skill:` outside plan mode, costing context in sessions that never plan. Plan mode always uses its bundled copy, even when the user installs the same skill normally, so plan-mode behavior is reproducible; the copy changes only when an explicit sync script refreshes it from apm's `.agents/skills/`.
