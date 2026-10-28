@@ -8,6 +8,7 @@
 
 ### Added
 
+- Added `/explore` for read-only repository architecture surveys, selectable Flow candidates, ASCII sequence diagrams, and native annotation navigation.
 - Device-code login (for example GitHub Copilot) now opens the verification page and copies the code when you press Enter. Providers can turn either action off with `openBrowserOnConfirm: false` or `copyCodeOnConfirm: false` ([#9282](https://github.com/earendil-works/pi/issues/9282), [#9301](https://github.com/earendil-works/pi/pull/9301))
 - Plan mode built-in extension: `/plan` starts a planning workflow with named phases, `plan_phase` moves between them, and the Continue/Exit menu ends it. `/plan-execute` exits plan mode once the plan is ready.
 - Plan mode asks once before publishing tickets in a git repository that has no Beads database: accepting runs `bd init --non-interactive --init-if-missing` at the git root and publishes there. Declining records a Beads opt-out for that repository in `beads-opt-out.json` in the global config, and the tickets go to the Markdown tracker without asking again. An existing Beads database always wins. See [Tracker choice](docs/plan-mode.md#tracker-choice).
