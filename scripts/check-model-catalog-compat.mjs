@@ -32,6 +32,8 @@ import { MINIMUM_PI_VERSION } from "./model-catalog-minimum-version.mjs";
 import { compareModelCatalogPiVersions } from "./model-catalog-protocol.ts";
 
 const PI_AI_PACKAGE = "@earendil-works/pi-ai";
+// Releases are tagged in upstream pi; a fork such as battlestar does not carry those tags.
+const UPSTREAM_REPOSITORY = "https://github.com/earendil-works/pi.git";
 
 /** Read a release's built-in model data (`dist/providers/data`) as model lists by provider. */
 function readBuiltinModels(dataDir) {
@@ -90,7 +92,11 @@ function main() {
 		console.log(`Checking the model catalog against pi ${release}...`);
 		// The release's source code.
 		const archive = join(temporaryDir, "release.tar");
-		run("git", ["archive", "--prefix=release/", "--output", archive, `v${release}`], root);
+		const tag = `v${release}`;
+		if (spawnSync("git", ["rev-parse", "--verify", "--quiet", `refs/tags/${tag}`], { cwd: root }).status !== 0) {
+			run("git", ["fetch", "--no-tags", UPSTREAM_REPOSITORY, `refs/tags/${tag}:refs/tags/${tag}`], root);
+		}
+		run("git", ["archive", "--prefix=release/", "--output", archive, tag], root);
 		run("tar", ["xf", archive, "-C", temporaryDir], root);
 
 		// The built-in models users have: the data shipped in the published package.
