@@ -13,6 +13,7 @@ import {
 	type ContentBlockStopEvent,
 	ConversationRole,
 	ConverseStreamCommand,
+	type ConverseStreamCommandOutput,
 	type ConverseStreamMetadataEvent,
 	ImageFormat,
 	type Message,
@@ -22,6 +23,7 @@ import {
 	type ToolResultContentBlock,
 	ToolResultStatus,
 } from "@aws-sdk/client-bedrock-runtime";
+import { type DefaultProviderInit, defaultProvider } from "@aws-sdk/credential-provider-node";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 import type { BuildMiddleware, DeserializeMiddleware, DocumentType, HttpResponse, MetadataBearer } from "@smithy/types";
 import { HttpProxyAgent } from "http-proxy-agent";
@@ -64,13 +66,22 @@ import {
 	type TranscriptContext,
 	withoutInitialSystemMessage,
 } from "../utils/transcript.ts";
-import { getJsonSchemaToolParameters, resolveJsonSchemaStrictSampling } from "./constrained-sampling.ts";
+import {
+	getJsonSchemaToolParameters,
+	prefersJsonSchemaStrictSampling,
+	resolveJsonSchemaStrictSampling,
+} from "./constrained-sampling.ts";
 import {
 	adjustMaxTokensForThinking,
 	buildBaseOptions,
 	clampMaxTokensToContext,
 	clampReasoning,
 } from "./simple-options.ts";
+import {
+	hasExceededStrictToolLimits,
+	isStrictToolLimitErrorMessage,
+	markStrictToolLimitsExceeded,
+} from "./strict-tool-limits.ts";
 import { splitErrorToolResultImages, transformMessages } from "./transform-messages.ts";
 
 export type BedrockThinkingDisplay = "summarized" | "omitted";
@@ -228,10 +239,18 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
 				// Bedrock runtime uses NodeHttp2Handler by default since v3.798.0, which is based
 				// on `http2` module and has no support for http agent.
 				// Use NodeHttpHandler to support HTTP(S) proxy agents.
-				config.requestHandler = new NodeHttpHandler({
+				const requestHandler = new NodeHttpHandler({
 					httpAgent: new HttpProxyAgent(proxyUrl),
 					httpsAgent: new HttpsProxyAgent(proxyUrl) as unknown as HttpsAgent,
 				});
+				config.requestHandler = requestHandler;
+				// The default credential chain builds its own SSO and SSO OIDC clients, which do
+				// not inherit the Bedrock client's request handler (#12353). The SDK uses this
+				// chain only when `credentials` is unset, so explicit keys keep their precedence.
+				// Those are static (env keys, skip-auth dummies) and make no requests, so they
+				// need no proxy.
+				config.credentialDefaultProvider = (init: DefaultProviderInit) =>
+					defaultProvider({ ...init, clientConfig: { ...init.clientConfig, requestHandler } });
 			} else if (getProviderEnvValue("AWS_BEDROCK_FORCE_HTTP1", options.env) === "1") {
 				// Some custom endpoints require HTTP/1.1 instead of HTTP/2
 				config.requestHandler = new NodeHttpHandler();
@@ -269,29 +288,56 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
 			const inferenceMaxTokens = options.maxTokens ?? (isAnthropicClaudeModel(model) ? model.maxTokens : undefined);
 			const initialSystemMessage = getInitialSystemMessage(normalizedContext.messages);
 			const initialSystemPrompt = initialSystemMessage ? getSystemMessageText(initialSystemMessage) : undefined;
-			let commandInput = {
-				modelId: model.id,
-				messages: convertMessages(normalizedContext, model, cacheRetention, options.env),
-				system: buildSystemPrompt(initialSystemPrompt, model, cacheRetention, options.env),
-				inferenceConfig: {
-					...(inferenceMaxTokens !== undefined && { maxTokens: inferenceMaxTokens }),
-					...(options.temperature !== undefined && { temperature: options.temperature }),
-				},
-				toolConfig: convertToolConfig(
+			let disablePreferredStrictTools = hasExceededStrictToolLimits(options.sessionId);
+			let response: ConverseStreamCommandOutput;
+			for (;;) {
+				const tools = convertToolConfig(
 					getCurrentTools(normalizedContext.messages),
 					options.toolChoice,
 					supportsStrictMode,
-				),
-				additionalModelRequestFields: buildAdditionalModelRequestFields(model, options),
-				...(options.requestMetadata !== undefined && { requestMetadata: options.requestMetadata }),
-			};
-			const nextCommandInput = await options?.onPayload?.(commandInput, model);
-			if (nextCommandInput !== undefined) {
-				commandInput = nextCommandInput as typeof commandInput;
+					disablePreferredStrictTools,
+				);
+				let commandInput = {
+					modelId: model.id,
+					messages: convertMessages(normalizedContext, model, cacheRetention, options.env),
+					system: buildSystemPrompt(initialSystemPrompt, model, cacheRetention, options.env),
+					inferenceConfig: {
+						...(inferenceMaxTokens !== undefined && { maxTokens: inferenceMaxTokens }),
+						...(options.temperature !== undefined && { temperature: options.temperature }),
+					},
+					toolConfig: tools.toolConfig,
+					additionalModelRequestFields: buildAdditionalModelRequestFields(model, options),
+					...(options.requestMetadata !== undefined && { requestMetadata: options.requestMetadata }),
+				};
+				const nextCommandInput = await options?.onPayload?.(commandInput, model);
+				if (nextCommandInput !== undefined) {
+					commandInput = nextCommandInput as typeof commandInput;
+				}
+				try {
+					response = await client.send(new ConverseStreamCommand(commandInput), { abortSignal: options.signal });
+					break;
+				} catch (error) {
+					// Bedrock checks the tool schemas before it starts the stream, so a retry never repeats streamed output.
+					if (
+						options.signal?.aborted ||
+						disablePreferredStrictTools ||
+						!tools.hasPreferredStrictTools ||
+						!(error instanceof BedrockRuntimeServiceException) ||
+						error.name !== "ValidationException" ||
+						!isStrictToolLimitErrorMessage(error.message)
+					) {
+						throw error;
+					}
+					disablePreferredStrictTools = true;
+					markStrictToolLimitsExceeded(options.sessionId);
+					appendAssistantMessageDiagnostic(output, {
+						type: "bedrock_strict_tools_fallback",
+						timestamp: Date.now(),
+						error: { message: error.message },
+						details: { reason: "strict_tool_limits_exceeded" },
+					});
+				}
 			}
-			const command = new ConverseStreamCommand(commandInput);
-
-			const response = await client.send(command, { abortSignal: options.signal });
 			responseRequestId = normalizeDiagnosticValue(response.$metadata.requestId);
 			if (!observedRawResponse && response.$metadata.httpStatusCode !== undefined) {
 				const responseHeaders: Record<string, string> = {};
@@ -1155,12 +1201,18 @@ function convertToolConfig(
 	tools: Tool[] | undefined,
 	toolChoice: BedrockOptions["toolChoice"],
 	supportsStrictMode: boolean,
-): ToolConfiguration | undefined {
-	if (!tools?.length) return undefined;
-	if (toolChoice === "none") return undefined;
+	disablePreferredStrictTools: boolean,
+): { toolConfig: ToolConfiguration | undefined; hasPreferredStrictTools: boolean } {
+	if (!tools?.length || toolChoice === "none") return { toolConfig: undefined, hasPreferredStrictTools: false };
 
+	let hasPreferredStrictTools = false;
 	const bedrockTools: BedrockTool[] = tools.map((tool) => {
-		const strict = resolveJsonSchemaStrictSampling(tool, supportsStrictMode);
+		const preferred = prefersJsonSchemaStrictSampling(tool);
+		const strict =
+			disablePreferredStrictTools && preferred
+				? undefined
+				: resolveJsonSchemaStrictSampling(tool, supportsStrictMode);
+		if (strict === true && preferred) hasPreferredStrictTools = true;
 		return {
 			toolSpec: {
 				name: tool.name,
@@ -1185,7 +1237,7 @@ function convertToolConfig(
 			}
 	}
 
-	return { tools: bedrockTools, toolChoice: bedrockToolChoice };
+	return { toolConfig: { tools: bedrockTools, toolChoice: bedrockToolChoice }, hasPreferredStrictTools };
 }
 
 function mapStopReason(reason: string | undefined): { stopReason: StopReason; errorMessage?: string } {

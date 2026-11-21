@@ -4,6 +4,7 @@ import {
 	type Focusable,
 	fuzzyFilter,
 	getKeybindings,
+	getSelectPageIndex,
 	Input,
 	Key,
 	matchesKey,
@@ -95,6 +96,7 @@ export interface ModelsCallbacks {
  * Changes are session-only until explicitly persisted with Ctrl+S.
  */
 export class ScopedModelsSelectorComponent extends Container implements Focusable {
+	readonly capturesViewportInput: boolean = true;
 	private modelsById: Map<string, Model<any>> = new Map();
 	private allIds: string[] = [];
 	private enabledIds: EnabledIds = null;
@@ -295,6 +297,13 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 			this.updateList();
 			return;
 		}
+		const pageIndex = getSelectPageIndex(kb, data, this.selectedIndex, this.filteredItems.length, this.maxVisible);
+		if (pageIndex !== undefined) {
+			if (this.filteredItems.length === 0) return;
+			this.selectedIndex = pageIndex;
+			this.updateList();
+			return;
+		}
 
 		// Reorder enabled models
 		const reorderUp = kb.matches(data, "app.models.reorderUp");
@@ -392,8 +401,14 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 			return;
 		}
 
-		// Pass everything else to search input
+		// Pass everything else to search input. A new query moves the selection to the top row, so the best match is
+		// highlighted; toggles and reorders call refresh() too, so the reset lives here and not there. Cursor keys
+		// leave the query as it is and must not move the selection.
+		const previousQuery = this.searchInput.getValue();
 		this.searchInput.handleInput(data);
+		const query = this.searchInput.getValue();
+		if (query === previousQuery) return;
+		if (query) this.selectedIndex = 0;
 		this.refresh();
 	}
 
