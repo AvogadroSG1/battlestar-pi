@@ -4,8 +4,8 @@
  * agent the next step. The state is persisted by index.ts as a `plan-orchestration` entry.
  */
 
-import { StringEnum } from "@earendil-works/pi-ai";
 import { type Static, Type } from "typebox";
+import { StringEnum } from "../../core/extensions/pi-ai-extension-view.ts";
 import { type CoreSkillName, renderCoreSkills } from "./core-skills.ts";
 import {
 	closeInTracker,

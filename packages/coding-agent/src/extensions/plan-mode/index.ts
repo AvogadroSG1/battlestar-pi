@@ -14,9 +14,10 @@
 import { join } from "node:path";
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { StringEnum, type TextContent } from "@earendil-works/pi-ai";
+import type { TextContent } from "@earendil-works/pi-ai";
 import { Key } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { StringEnum } from "../../core/extensions/pi-ai-extension-view.ts";
 import type { ExtensionAPI, ExtensionContext } from "../../core/extensions/types.ts";
 import { planContext } from "./guidance.ts";
 import {

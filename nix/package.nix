@@ -20,6 +20,10 @@ let
   # Lockfile root used by the pi.dev installer. It pins the coding agent's
   # runtime dependency tree and is kept in sync with package-lock.json by
   # `npm run check`.
+  # The harness prints the upstream base with its revision, such as 1.6.0-bs.1.
+  harnessRevision = packageJson.piConfig.harnessRevision or null;
+  expectedVersion =
+    packageJson.version + lib.optionalString (harnessRevision != null) "-bs.${toString harnessRevision}";
   installLock = source + "/packages/coding-agent/install-lock";
   modelCatalogPin = lib.importJSON ./model-catalog.json;
   modelCatalog = fetchurl {
@@ -63,6 +67,7 @@ let
 
       mkdir -p "$out"
       pack_package packages/telemetry telemetry
+      pack_package packages/schema schema
       pack_package packages/ai ai
       pack_package packages/tui tui
       pack_package packages/agent agent
@@ -84,6 +89,7 @@ let
       "node_modules/@earendil-works/pi-codemode" = workspacePackages + "/codemode.tgz";
       "node_modules/@earendil-works/pi-coding-agent" = workspacePackages + "/coding-agent.tgz";
       "node_modules/@earendil-works/pi-mcp" = workspacePackages + "/mcp.tgz";
+      "node_modules/@earendil-works/pi-schema" = workspacePackages + "/schema.tgz";
       "node_modules/@earendil-works/pi-telemetry" = workspacePackages + "/telemetry.tgz";
       "node_modules/@earendil-works/pi-tui" = workspacePackages + "/tui.tgz";
     };
@@ -144,7 +150,7 @@ stdenv.mkDerivation {
   doInstallCheck = true;
   installCheckPhase = ''
     runHook preInstallCheck
-    test "$("$out/bin/pi" --version)" = "${packageJson.version}"
+    test "$("$out/bin/pi" --version)" = "${expectedVersion}"
     # Load host-platform TUI helpers directly so missing native dependencies
     # fail the build rather than silently disabling clipboard support.
     ${nodejs}/bin/node -e \
