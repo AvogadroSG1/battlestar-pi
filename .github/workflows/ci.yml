@@ -53,10 +53,13 @@ jobs:
         run: npm run check
 
       # The checkout has no tags; the released changelog sections are compared with the newest release tag.
+      # Releases are tagged in upstream pi, not in this fork.
       - name: Fetch the newest release tag
+        env:
+          UPSTREAM: https://github.com/earendil-works/pi.git
         run: |
-          tag=$(git ls-remote --tags --sort=-v:refname origin 'v*.*.*' | grep -v '\^{}' | head -1 | sed 's#.*refs/tags/##')
-          git fetch --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
+          tag=$(git ls-remote --tags --sort=-v:refname "$UPSTREAM" 'v*.*.*' | grep -v '\^{}' | head -1 | sed 's#.*refs/tags/##')
+          git fetch --depth=1 "$UPSTREAM" "refs/tags/$tag:refs/tags/$tag"
 
       - name: Check released changelog sections
         run: npm run check:released-changelogs

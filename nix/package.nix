@@ -20,6 +20,10 @@ let
   # Lockfile root used by the pi.dev installer. It pins the coding agent's
   # runtime dependency tree and is kept in sync with package-lock.json by
   # `npm run check`.
+  # The harness prints the upstream base with its revision, such as 1.6.0-bs.1.
+  harnessRevision = packageJson.piConfig.harnessRevision or null;
+  expectedVersion =
+    packageJson.version + lib.optionalString (harnessRevision != null) "-bs.${toString harnessRevision}";
   installLock = source + "/packages/coding-agent/install-lock";
   modelCatalogPin = lib.importJSON ./model-catalog.json;
   modelCatalog = fetchurl {
@@ -146,7 +150,7 @@ stdenv.mkDerivation {
   doInstallCheck = true;
   installCheckPhase = ''
     runHook preInstallCheck
-    test "$("$out/bin/pi" --version)" = "${packageJson.version}"
+    test "$("$out/bin/pi" --version)" = "${expectedVersion}"
     # Load host-platform TUI helpers directly so missing native dependencies
     # fail the build rather than silently disabling clipboard support.
     ${nodejs}/bin/node -e \
